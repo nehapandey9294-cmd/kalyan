@@ -76,9 +76,26 @@ app.get('/health', (req, res) => {
   res.redirect('/api/health');
 });
 
-app.get('/', (req, res) => {
-  res.json({ message: 'GAMA567 API Server is running!', health: '/api/health' });
-});
+// Serve Frontend SPA in production / Render unified service
+const frontendDistPath = path.join(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  app.get('*', (req, res, next) => {
+    if (
+      req.path.startsWith('/api') ||
+      req.path.startsWith('/uploads') ||
+      req.path.startsWith('/apk') ||
+      req.path.startsWith('/health')
+    ) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+} else {
+  app.get('/', (req, res) => {
+    res.json({ message: 'GAMA567 API Server is running!', health: '/api/health' });
+  });
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {

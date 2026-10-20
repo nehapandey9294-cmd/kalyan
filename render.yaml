@@ -1,0 +1,18 @@
+services:
+  # Option A: If deployed as a Render Static Site
+  - type: static
+    name: user-and-admin-frontend
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  # Option B: If deployed as a Render Node Web Service (Unified API + Frontend)
+  - type: web
+    name: user-and-admin
+    env: node
+    plan: free
+    buildCommand: npm install && cd frontend && npm install && npm run build && cd ../backend && npm install
+    startCommand: cd backend && node server.js
