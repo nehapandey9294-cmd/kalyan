@@ -1,0 +1,14 @@
+{
+  "name": "playstore-kalyan-matka",
+  "version": "1.0.0",
+  "description": "Google Play Store UI Clone for Kalyan Satta Matka Play Online",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve . -p 3000",
+    "dev": "npx live-server --port=5174",
+    "preview": "npx serve ."
+  },
+  "keywords": ["google-play", "playstore", "kalyan-matka", "ui-clone"],
+  "author": "ML Tech Solutions",
+  "license": "ISC"
+}

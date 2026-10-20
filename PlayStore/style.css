@@ -1,0 +1,1490 @@
+/* ==========================================================================
+   Google Play Store Official Design System & Stylesheet
+   End-to-End Parity with play.google.com/store/apps/details?id=com.app.kalyaanmatka
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Google+Sans:wght@400;500;700&display=swap');
+
+:root {
+  --gp-green: #01875f;
+  --gp-green-hover: #016f4e;
+  --gp-green-active: #015c41;
+  --gp-green-light: #e6f4ea;
+  --gp-green-surface: #e8f5e9;
+  --gp-text-primary: #202124;
+  --gp-text-secondary: #5f6368;
+  --gp-text-muted: #80868b;
+  --gp-border: #dadce0;
+  --gp-border-light: #e8eaed;
+  --gp-bg: #ffffff;
+  --gp-bg-subtle: #f8f9fa;
+  --gp-card-hover: #f1f3f4;
+  --gp-star: #01875f;
+  --gp-star-gray: #e8eaed;
+  --gp-focus-ring: rgba(1, 135, 95, 0.25);
+  --gp-shadow-sm: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+  --gp-shadow-md: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
+  --gp-shadow-lg: 0 4px 20px rgba(0, 0, 0, 0.12);
+  --gp-font-headline: 'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  --gp-font-body: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  --gp-content-max: 1280px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: var(--gp-font-body);
+  color: var(--gp-text-primary);
+  background-color: var(--gp-bg);
+  line-height: 1.5;
+  overflow-x: hidden;
+  font-size: 14px;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   1. TOP NAVIGATION BAR (Exact Google Play Header)
+   ========================================================================== */
+.gp-nav-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background-color: var(--gp-bg);
+  border-bottom: 1px solid var(--gp-border-light);
+  height: 64px;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+}
+
+.gp-nav-container {
+  width: 100%;
+  max-width: var(--gp-content-max);
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gp-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 36px;
+}
+
+.gp-brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.gp-logo-triangle {
+  width: 32px;
+  height: 32px;
+  display: block;
+}
+
+.gp-brand-text {
+  font-family: var(--gp-font-headline);
+  font-size: 22px;
+  font-weight: 500;
+  color: #5f6368;
+  letter-spacing: -0.01em;
+}
+
+.gp-brand-text span {
+  color: #1f1f1f;
+  font-weight: 500;
+}
+
+.gp-nav-tabs {
+  display: flex;
+  align-items: center;
+  height: 64px;
+  gap: 8px;
+}
+
+.gp-nav-tab {
+  position: relative;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-family: var(--gp-font-headline);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gp-text-secondary);
+  transition: color 0.15s ease;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.gp-nav-tab:hover {
+  color: var(--gp-text-primary);
+}
+
+.gp-nav-tab.active {
+  color: var(--gp-green);
+  font-weight: 600;
+}
+
+.gp-nav-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 12px;
+  right: 12px;
+  height: 3px;
+  background-color: var(--gp-green);
+  border-radius: 3px 3px 0 0;
+}
+
+.gp-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gp-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gp-text-secondary);
+  transition: background-color 0.15s ease;
+}
+
+.gp-icon-btn:hover {
+  background-color: var(--gp-bg-subtle);
+  color: var(--gp-text-primary);
+}
+
+.gp-profile-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #c2185b;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--gp-font-headline);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.15s ease;
+}
+
+.gp-profile-avatar:hover {
+  transform: scale(1.05);
+}
+
+/* ==========================================================================
+   2. MAIN PAGE LAYOUT
+   ========================================================================== */
+.gp-main-wrapper {
+  max-width: var(--gp-content-max);
+  margin: 0 auto;
+  padding: 32px 24px 60px;
+}
+
+.gp-page-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 48px;
+  align-items: start;
+}
+
+.gp-content-col {
+  min-width: 0;
+}
+
+.gp-sidebar-col {
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ==========================================================================
+   3. HERO HEADER SECTION (Title, Rating, Buttons, Icon)
+   ========================================================================== */
+.gp-hero-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 40px;
+  margin-bottom: 28px;
+}
+
+.gp-hero-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.gp-app-title {
+  font-family: var(--gp-font-headline);
+  font-size: 40px;
+  font-weight: 700;
+  color: var(--gp-text-primary);
+  line-height: 1.15;
+  margin-bottom: 12px;
+  letter-spacing: -0.015em;
+  text-transform: uppercase;
+}
+
+.gp-developer-link {
+  display: inline-block;
+  font-family: var(--gp-font-headline);
+  color: var(--gp-green);
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 24px;
+  transition: opacity 0.15s ease;
+}
+
+.gp-developer-link:hover {
+  text-decoration: underline;
+  opacity: 0.9;
+}
+
+/* App Stats Bar */
+.gp-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  margin-bottom: 28px;
+}
+
+.gp-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.gp-stat-value {
+  font-family: var(--gp-font-headline);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gp-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.gp-stat-label {
+  font-size: 12px;
+  color: var(--gp-text-secondary);
+  margin-top: 2px;
+}
+
+.gp-stat-divider {
+  width: 1px;
+  height: 24px;
+  background-color: var(--gp-border);
+}
+
+/* Action Buttons */
+.gp-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.gp-btn-install {
+  background-color: var(--gp-green);
+  color: #ffffff;
+  font-family: var(--gp-font-headline);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 42px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+  transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  user-select: none;
+}
+
+.gp-btn-install:hover {
+  background-color: var(--gp-green-hover);
+  box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
+}
+
+.gp-btn-install:active {
+  background-color: var(--gp-green-active);
+  transform: scale(0.99);
+}
+
+.gp-btn-install.installing {
+  background-color: var(--gp-green-hover);
+  cursor: wait;
+}
+
+.gp-btn-install.installed {
+  background-color: var(--gp-text-primary);
+}
+
+.gp-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gp-green);
+  font-family: var(--gp-font-headline);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+}
+
+.gp-btn-ghost:hover {
+  background-color: var(--gp-green-light);
+}
+
+.gp-btn-ghost.wishlisted {
+  color: #1a73e8;
+}
+
+.gp-btn-ghost.wishlisted:hover {
+  background-color: #e8f0fe;
+}
+
+/* Device Compatibility Row */
+.gp-device-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--gp-text-secondary);
+  font-size: 14px;
+}
+
+.gp-device-notice svg {
+  color: var(--gp-text-secondary);
+}
+
+/* App Big Icon (Right Side) */
+.gp-app-icon-wrapper {
+  width: 220px;
+  height: 220px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.gp-app-icon-card {
+  width: 100%;
+  height: 100%;
+  border-radius: 20%;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0,0,0,0.1);
+  overflow: hidden;
+  background: #111111;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.gp-app-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Fallback High-Fidelity SVG Icon */
+.gp-icon-svg-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ==========================================================================
+   4. SCREENSHOTS CAROUSEL
+   ========================================================================== */
+.gp-screenshots-container {
+  position: relative;
+  margin-bottom: 40px;
+  margin-top: 10px;
+}
+
+.gp-screenshots-scroll {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  padding: 4px 2px 14px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.gp-screenshots-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.gp-screenshots-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.gp-screenshots-scroll::-webkit-scrollbar-thumb {
+  background: #dadce0;
+  border-radius: 6px;
+}
+
+.gp-screenshot-item {
+  flex: 0 0 200px;
+  width: 200px;
+  height: 420px;
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: #f8fafc;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+  scroll-snap-align: start;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+  position: relative;
+}
+
+.gp-screenshot-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.gp-carousel-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gp-text-secondary);
+  z-index: 10;
+  transition: all 0.2s ease;
+  border: 1px solid var(--gp-border-light);
+}
+
+.gp-carousel-arrow:hover {
+  background-color: #ffffff;
+  color: var(--gp-text-primary);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  transform: translateY(-50%) scale(1.05);
+}
+
+.gp-carousel-arrow.prev {
+  left: -20px;
+}
+
+.gp-carousel-arrow.next {
+  right: -20px;
+}
+
+/* ==========================================================================
+   5. PHONE MOCKUP RENDERER INSIDE SCREENSHOTS
+   ========================================================================== */
+.mockup-screen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  font-family: var(--gp-font-body);
+  user-select: none;
+}
+
+.mockup-status-bar {
+  height: 22px;
+  background: #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  color: #cbd5e1;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.mockup-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.mockup-bottom-nav {
+  height: 38px;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  font-size: 8px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.mockup-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.mockup-nav-item.active {
+  color: #10b981;
+}
+
+/* ==========================================================================
+   6. SECTION BLOCKS (About, Safety, Ratings)
+   ========================================================================== */
+.gp-section-block {
+  margin-bottom: 36px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--gp-border-light);
+}
+
+.gp-section-block.no-border {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.gp-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  cursor: pointer;
+}
+
+.gp-section-title {
+  font-family: var(--gp-font-headline);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--gp-text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gp-section-title:hover {
+  color: var(--gp-green);
+}
+
+.gp-section-arrow {
+  color: var(--gp-text-secondary);
+  transition: transform 0.2s ease;
+}
+
+.gp-section-header:hover .gp-section-arrow {
+  transform: translateX(4px);
+  color: var(--gp-green);
+}
+
+.gp-section-text {
+  color: var(--gp-text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.gp-meta-tags-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.gp-meta-updated {
+  font-size: 13px;
+  color: var(--gp-text-secondary);
+}
+
+.gp-meta-updated strong {
+  display: block;
+  font-size: 14px;
+  color: var(--gp-text-primary);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.gp-chips-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.gp-chip {
+  padding: 6px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--gp-border);
+  background-color: #ffffff;
+  color: var(--gp-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gp-chip:hover {
+  background-color: var(--gp-bg-subtle);
+  color: var(--gp-text-primary);
+}
+
+.gp-chip.active {
+  background-color: var(--gp-green-light);
+  border-color: var(--gp-green);
+  color: var(--gp-green);
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   7. FEATURED STORIES BANNER (Play Fest)
+   ========================================================================== */
+.gp-featured-stories {
+  margin-bottom: 36px;
+}
+
+.gp-story-banner {
+  background: linear-gradient(135deg, #fef08a 0%, #fde047 30%, #eab308 100%);
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+  min-height: 240px;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4px 20px rgba(234, 179, 8, 0.25);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.gp-story-content {
+  padding: 36px 40px;
+  flex: 1;
+  z-index: 2;
+  max-width: 480px;
+}
+
+.gp-story-tag {
+  display: inline-block;
+  background-color: rgba(0, 0, 0, 0.08);
+  color: #713f12;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.gp-story-title {
+  font-family: var(--gp-font-headline);
+  font-size: 26px;
+  font-weight: 800;
+  color: #1c1917;
+  line-height: 1.25;
+  margin-bottom: 8px;
+}
+
+.gp-story-sub {
+  color: #44403c;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.gp-story-graphic {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 55%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.gp-story-img {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  object-position: right center;
+}
+
+/* ==========================================================================
+   8. DATA SAFETY SECTION
+   ========================================================================== */
+.gp-data-safety-card {
+  border: 1px solid var(--gp-border);
+  border-radius: 8px;
+  padding: 20px;
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.gp-safety-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.gp-safety-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--gp-text-secondary);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.gp-safety-title {
+  font-weight: 500;
+  color: var(--gp-text-primary);
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.gp-safety-desc {
+  font-size: 12px;
+  color: var(--gp-text-secondary);
+  line-height: 1.4;
+}
+
+.gp-safety-link {
+  color: var(--gp-green);
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-block;
+  margin-top: 4px;
+}
+
+.gp-safety-link:hover {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   9. RATINGS AND REVIEWS SECTION
+   ========================================================================== */
+.gp-reviews-meta-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.gp-verified-tag {
+  font-size: 13px;
+  color: var(--gp-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Score & Histogram Box */
+.gp-rating-summary {
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  margin: 20px 0 28px;
+}
+
+.gp-rating-big-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.gp-rating-big-num {
+  font-family: var(--gp-font-headline);
+  font-size: 56px;
+  font-weight: 700;
+  color: var(--gp-text-primary);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.gp-rating-stars {
+  display: flex;
+  gap: 3px;
+  color: var(--gp-star);
+  margin: 8px 0 4px;
+}
+
+.gp-rating-count {
+  font-size: 13px;
+  color: var(--gp-text-secondary);
+}
+
+.gp-rating-bars-col {
+  flex: 1;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gp-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--gp-text-secondary);
+  font-weight: 500;
+}
+
+.gp-bar-num {
+  width: 10px;
+  text-align: right;
+}
+
+.gp-bar-track {
+  flex: 1;
+  height: 10px;
+  background-color: var(--gp-border-light);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.gp-bar-fill {
+  height: 100%;
+  background-color: var(--gp-star);
+  border-radius: 6px;
+}
+
+/* Review Item Card */
+.gp-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.gp-review-card {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--gp-border-light);
+}
+
+.gp-review-card:last-child {
+  border-bottom: none;
+}
+
+.gp-review-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.gp-reviewer-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.gp-reviewer-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-family: var(--gp-font-headline);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.gp-reviewer-name {
+  font-family: var(--gp-font-headline);
+  font-weight: 500;
+  color: var(--gp-text-primary);
+  font-size: 14px;
+}
+
+.gp-review-rating-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.gp-review-stars {
+  display: flex;
+  gap: 2px;
+  color: var(--gp-star);
+}
+
+.gp-review-date {
+  font-size: 12px;
+  color: var(--gp-text-muted);
+}
+
+.gp-review-body {
+  color: var(--gp-text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.gp-review-helpful-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--gp-text-secondary);
+}
+
+.gp-helpful-btn {
+  border: 1px solid var(--gp-border);
+  padding: 4px 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--gp-text-secondary);
+  transition: all 0.15s ease;
+}
+
+.gp-helpful-btn:hover {
+  background-color: var(--gp-bg-subtle);
+  color: var(--gp-text-primary);
+}
+
+.gp-helpful-btn.voted {
+  background-color: var(--gp-green-light);
+  border-color: var(--gp-green);
+  color: var(--gp-green);
+}
+
+.gp-see-all-reviews {
+  display: inline-block;
+  margin-top: 18px;
+  color: var(--gp-green);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.gp-see-all-reviews:hover {
+  text-decoration: underline;
+}
+
+.gp-flag-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  color: var(--gp-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.gp-flag-action:hover {
+  color: var(--gp-text-primary);
+}
+
+/* ==========================================================================
+   10. RIGHT SIDEBAR (Rating Box, Support, Similar Games)
+   ========================================================================== */
+.gp-content-rating-card {
+  border: 1px solid var(--gp-border);
+  border-radius: 8px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background-color: #ffffff;
+}
+
+.gp-iarc-badge {
+  background-color: #000000;
+  color: #ffffff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: var(--gp-font-headline);
+  font-weight: 900;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.gp-iarc-badge span {
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.gp-rating-info-title {
+  font-weight: 600;
+  color: var(--gp-text-primary);
+  font-size: 14px;
+}
+
+.gp-rating-info-sub {
+  font-size: 12px;
+  color: var(--gp-text-secondary);
+  margin: 2px 0;
+}
+
+.gp-rating-info-link {
+  font-size: 12px;
+  color: var(--gp-green);
+  font-weight: 500;
+}
+
+.gp-rating-info-link:hover {
+  text-decoration: underline;
+}
+
+/* App Support Accordion */
+.gp-accordion-box {
+  border-bottom: 1px solid var(--gp-border-light);
+  padding-bottom: 16px;
+}
+
+.gp-accordion-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--gp-font-headline);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--gp-text-primary);
+  padding: 6px 0;
+}
+
+.gp-accordion-content {
+  display: none;
+  padding-top: 12px;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--gp-text-secondary);
+}
+
+.gp-accordion-content.open {
+  display: flex;
+}
+
+.gp-support-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gp-support-row svg {
+  color: var(--gp-text-secondary);
+}
+
+/* Similar Games Section */
+.gp-similar-games {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.gp-similar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--gp-font-headline);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--gp-text-primary);
+  cursor: pointer;
+}
+
+.gp-similar-header:hover {
+  color: var(--gp-green);
+}
+
+.gp-similar-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 0;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+}
+
+.gp-similar-item:hover {
+  background-color: var(--gp-bg-subtle);
+}
+
+.gp-similar-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  flex-shrink: 0;
+}
+
+.gp-similar-icon img,
+.gp-similar-icon svg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gp-similar-details {
+  min-width: 0;
+  flex: 1;
+}
+
+.gp-similar-name {
+  font-family: var(--gp-font-headline);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gp-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gp-similar-author {
+  font-size: 12px;
+  color: var(--gp-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 2px 0;
+}
+
+.gp-similar-price-rating {
+  font-size: 12px;
+  color: var(--gp-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* ==========================================================================
+   11. GOOGLE PLAY OFFICIAL FOOTER
+   ========================================================================== */
+.gp-footer {
+  background-color: #ffffff;
+  border-top: 1px solid var(--gp-border-light);
+  padding: 40px 0 28px;
+  color: var(--gp-text-secondary);
+  font-size: 13px;
+  margin-top: 40px;
+}
+
+.gp-footer-container {
+  max-width: var(--gp-content-max);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.gp-footer-cols {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 32px;
+  margin-bottom: 40px;
+}
+
+.gp-footer-col-title {
+  font-family: var(--gp-font-headline);
+  font-weight: 600;
+  color: var(--gp-text-primary);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.gp-footer-links {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gp-footer-links a {
+  color: var(--gp-text-secondary);
+  transition: color 0.15s ease;
+}
+
+.gp-footer-links a:hover {
+  color: var(--gp-text-primary);
+}
+
+.gp-footer-divider {
+  height: 1px;
+  background-color: var(--gp-border-light);
+  margin-bottom: 24px;
+}
+
+.gp-footer-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.gp-legal-links {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.gp-legal-links a:hover {
+  color: var(--gp-text-primary);
+}
+
+.gp-country-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gp-text-secondary);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   12. MODALS, TOASTS & LIGHTBOX
+   ========================================================================== */
+.gp-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.gp-modal-overlay.open {
+  display: flex;
+}
+
+.gp-modal-card {
+  background-color: #ffffff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--gp-shadow-lg);
+  padding: 24px;
+  position: relative;
+  animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.gp-modal-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gp-text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.gp-modal-close:hover {
+  background-color: var(--gp-bg-subtle);
+  color: var(--gp-text-primary);
+}
+
+.gp-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background-color: #323232;
+  color: #ffffff;
+  padding: 14px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  z-index: 10000;
+  opacity: 0;
+  transition: all 0.25s ease;
+  pointer-events: none;
+}
+
+.gp-toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* Lightbox Modal for Screenshots */
+.gp-lightbox-content {
+  max-width: 440px;
+  height: 85vh;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gp-lightbox-content .mockup-screen {
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+}
+
+/* ==========================================================================
+   13. RESPONSIVE MEDIA QUERIES
+   ========================================================================== */
+@media (max-width: 992px) {
+  .gp-page-grid {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .gp-sidebar-col {
+    width: 100%;
+  }
+
+  .gp-footer-cols {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .gp-story-banner {
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  .gp-story-content {
+    max-width: 100%;
+    padding: 24px;
+  }
+
+  .gp-story-graphic {
+    position: relative;
+    width: 100%;
+    height: 180px;
+  }
+}
+
+@media (max-width: 768px) {
+  .gp-nav-tabs {
+    display: none;
+  }
+
+  .gp-hero-section {
+    flex-direction: column-reverse;
+    gap: 20px;
+    align-items: flex-start;
+  }
+
+  .gp-app-icon-wrapper {
+    width: 96px;
+    height: 96px;
+  }
+
+  .gp-app-title {
+    font-size: 26px;
+  }
+
+  .gp-rating-summary {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .gp-rating-bars-col {
+    width: 100%;
+  }
+
+  .gp-carousel-arrow {
+    display: none;
+  }
+
+  .gp-screenshot-item {
+    flex: 0 0 170px;
+    width: 170px;
+    height: 360px;
+  }
+}
+
+@media (max-width: 480px) {
+  .gp-main-wrapper {
+    padding: 16px 14px 40px;
+  }
+
+  .gp-app-title {
+    font-size: 22px;
+  }
+
+  .gp-btn-install {
+    width: 100%;
+    padding: 12px;
+  }
+
+  .gp-actions-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .gp-btn-ghost {
+    justify-content: center;
+  }
+
+  .gp-footer-cols {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
