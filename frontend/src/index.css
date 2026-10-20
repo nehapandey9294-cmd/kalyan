@@ -1,0 +1,739 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  --bg-primary: #0b1a30;
+  --bg-secondary: #122849;
+  --bg-card: rgba(18, 40, 73, 0.6);
+  --border-color: rgba(214, 190, 102, 0.25);
+  --border-hover: rgba(214, 190, 102, 0.5);
+  --color-gold: #d6be66;
+  --color-gold-hover: #fab02b;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #b3c5dd;
+  --color-success: #2ec4b6;
+  --color-danger: #e71d36;
+  --font-main: 'Outfit', sans-serif;
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --glass-backdrop: blur(12px);
+  --transition-smooth: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-primary);
+  background-image: 
+    radial-gradient(at 10% 10%, rgba(214, 190, 102, 0.08) 0px, transparent 50%),
+    radial-gradient(at 90% 90%, rgba(18, 40, 73, 0.5) 0px, transparent 50%);
+  color: var(--color-text-primary);
+  font-family: var(--font-main);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Glassmorphism Styles */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: var(--glass-shadow);
+  padding: 24px;
+  transition: var(--transition-smooth);
+}
+
+.glass-panel:hover {
+  border-color: var(--border-hover);
+  transform: translateY(-2px);
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Custom inputs */
+.form-group {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-label {
+  color: var(--color-gold);
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-input {
+  background: rgba(11, 26, 48, 0.8);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: #fff;
+  font-family: var(--font-main);
+  font-size: 1rem;
+  padding: 12px 16px;
+  transition: var(--transition-smooth);
+  width: 100%;
+}
+
+.form-input:focus {
+  border-color: var(--color-gold);
+  box-shadow: 0 0 10px rgba(214, 190, 102, 0.2);
+  outline: none;
+}
+
+/* Button styles */
+.btn-gold {
+  background: linear-gradient(135deg, var(--color-gold) 0%, #bca54e 100%);
+  border: none;
+  border-radius: 8px;
+  color: var(--bg-primary);
+  cursor: pointer;
+  font-family: var(--font-main);
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 12px 24px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: var(--transition-smooth);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-gold:hover {
+  background: linear-gradient(135deg, var(--color-gold-hover) 0%, var(--color-gold) 100%);
+  box-shadow: 0 4px 15px rgba(214, 190, 102, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--color-gold);
+  border-radius: 8px;
+  color: var(--color-gold);
+  cursor: pointer;
+  font-family: var(--font-main);
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 12px 24px;
+  transition: var(--transition-smooth);
+}
+
+.btn-outline:hover {
+  background: rgba(214, 190, 102, 0.1);
+  color: var(--color-gold-hover);
+  border-color: var(--color-gold-hover);
+}
+
+/* Table styling */
+.custom-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.custom-table th {
+  border-bottom: 2px solid var(--border-color);
+  color: var(--color-gold);
+  font-weight: 600;
+  padding: 14px 16px;
+  text-align: left;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+}
+
+.custom-table td {
+  border-bottom: 1px solid rgba(214, 190, 102, 0.1);
+  padding: 14px 16px;
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+}
+
+.custom-table tr:hover td {
+  color: #fff;
+  background: rgba(214, 190, 102, 0.03);
+}
+
+/* Game Card grid */
+.games-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.game-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.game-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--color-gold);
+}
+
+.game-card.closed::before {
+  background: var(--color-text-secondary);
+}
+
+/* Badges */
+.badge {
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
+.badge-success {
+  background: rgba(46, 196, 182, 0.2);
+  color: var(--color-success);
+  border: 1px solid rgba(46, 196, 182, 0.3);
+}
+
+.badge-danger {
+  background: rgba(230, 29, 54, 0.2);
+  color: var(--color-danger);
+  border: 1px solid rgba(230, 29, 54, 0.3);
+}
+
+/* Loader */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(214, 190, 102, 0.1);
+  border-top-color: var(--color-gold);
+  border-radius: 50%;
+  animation: spin 1s infinite linear;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Layout Utilities */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.grid-cols-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .grid-cols-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==========================================================================
+   AUTH PAGE MODERN THEMES & WHATSAPP SUPPORT STYLES
+   ========================================================================== */
+
+/* WhatsApp Button */
+.btn-whatsapp {
+  background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+  color: #ffffff !important;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 12px 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: 0 6px 20px rgba(37, 211, 102, 0.35);
+  letter-spacing: 0.03em;
+  width: 100%;
+}
+
+.btn-whatsapp:hover {
+  background: linear-gradient(135deg, #2ce471 0%, #159f8e 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(37, 211, 102, 0.5);
+  color: #fff !important;
+}
+
+/* Floating WhatsApp Floating Badge */
+.floating-whatsapp {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: 50px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.9rem;
+  box-shadow: 0 10px 25px rgba(37, 211, 102, 0.45);
+  transition: all 0.3s ease;
+  animation: floatPulse 3s infinite ease-in-out;
+}
+
+.floating-whatsapp:hover {
+  transform: scale(1.06) translateY(-3px);
+  box-shadow: 0 14px 30px rgba(37, 211, 102, 0.6);
+  color: #fff;
+}
+
+@keyframes floatPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 14px rgba(37, 211, 102, 0);
+  }
+}
+
+/* Modern Input with Icon & Password Toggle */
+.input-group-custom {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.input-icon-left {
+  position: absolute;
+  left: 14px;
+  color: var(--theme-accent, #d6be66);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 2;
+  transition: color 0.3s ease;
+}
+
+.form-input-icon {
+  padding-left: 42px !important;
+  padding-right: 42px !important;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color 0.2s ease, background 0.2s ease;
+  z-index: 2;
+}
+
+.password-toggle-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Theme Selector Pills */
+.theme-selector-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 6px 12px;
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.theme-pill {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.25s ease;
+  position: relative;
+}
+
+.theme-pill.active {
+  border-color: #ffffff;
+  transform: scale(1.25);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+}
+
+.theme-pill-gold {
+  background: linear-gradient(135deg, #d6be66 0%, #10b981 100%);
+}
+
+.theme-pill-cyan {
+  background: linear-gradient(135deg, #06b6d4 0%, #a855f7 100%);
+}
+
+.theme-pill-crimson {
+  background: linear-gradient(135deg, #f43f5e 0%, #f97316 100%);
+}
+
+/* Auth Card Glass Panels & Theme Dynamic Styles */
+.auth-page-bg {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.5s ease;
+}
+
+.auth-theme-gold {
+  background: 
+    radial-gradient(circle at 15% 15%, rgba(214, 190, 102, 0.18) 0%, transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.18) 0%, transparent 45%),
+    #09121f;
+}
+
+.auth-theme-cyan {
+  background: 
+    radial-gradient(circle at 15% 15%, rgba(6, 182, 212, 0.22) 0%, transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(168, 85, 247, 0.22) 0%, transparent 45%),
+    #0b0d19;
+}
+
+.auth-theme-crimson {
+  background: 
+    radial-gradient(circle at 15% 15%, rgba(244, 63, 94, 0.22) 0%, transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(249, 115, 22, 0.22) 0%, transparent 45%),
+    #140a12;
+}
+
+.auth-card {
+  width: 100%;
+  border-radius: 24px;
+  padding: 32px 28px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  position: relative;
+  z-index: 5;
+  animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.auth-heading-gradient-gold {
+  background: linear-gradient(135deg, #ffe885 0%, #d6be66 50%, #10b981 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.auth-heading-gradient-cyan {
+  background: linear-gradient(135deg, #67e8f9 0%, #06b6d4 50%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.auth-heading-gradient-crimson {
+  background: linear-gradient(135deg, #fca5a5 0%, #f43f5e 50%, #fb923c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.btn-theme-submit-gold {
+  background: linear-gradient(135deg, #d6be66 0%, #10b981 100%);
+  color: #0b1a30;
+  box-shadow: 0 6px 20px rgba(214, 190, 102, 0.35);
+}
+
+.btn-theme-submit-gold:hover {
+  background: linear-gradient(135deg, #e8ce73 0%, #059669 100%);
+  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.5);
+}
+
+.btn-theme-submit-cyan {
+  background: linear-gradient(135deg, #06b6d4 0%, #a855f7 100%);
+  color: #ffffff;
+  box-shadow: 0 6px 20px rgba(6, 182, 212, 0.35);
+}
+
+.btn-theme-submit-cyan:hover {
+  background: linear-gradient(135deg, #22d3ee 0%, #c084fc 100%);
+  box-shadow: 0 8px 25px rgba(168, 85, 247, 0.5);
+}
+
+.btn-theme-submit-crimson {
+  background: linear-gradient(135deg, #f43f5e 0%, #f97316 100%);
+  color: #ffffff;
+  box-shadow: 0 6px 20px rgba(244, 63, 94, 0.35);
+}
+
+.btn-theme-submit-crimson:hover {
+  background: linear-gradient(135deg, #fb7185 0%, #fb923c 100%);
+  box-shadow: 0 8px 25px rgba(249, 115, 22, 0.5);
+}
+
+/* ==========================================================================
+   APP-WIDE MODERN COMPONENT SYSTEM & DYNAMIC THEMING
+   ========================================================================== */
+
+.app-theme-gold {
+  --app-bg: #09121f;
+  --app-accent: #d6be66;
+  --app-accent-hover: #fab02b;
+  --app-gradient-primary: linear-gradient(135deg, #d6be66 0%, #10b981 100%);
+  --app-card-border: rgba(214, 190, 102, 0.22);
+  --app-card-bg: rgba(13, 31, 45, 0.65);
+  --app-badge-open: #10b981;
+}
+
+.app-theme-cyan {
+  --app-bg: #0b0d19;
+  --app-accent: #06b6d4;
+  --app-accent-hover: #38bdf8;
+  --app-gradient-primary: linear-gradient(135deg, #06b6d4 0%, #a855f7 100%);
+  --app-card-border: rgba(6, 182, 212, 0.25);
+  --app-card-bg: rgba(15, 23, 42, 0.65);
+  --app-badge-open: #06b6d4;
+}
+
+.app-theme-crimson {
+  --app-bg: #140a12;
+  --app-accent: #f43f5e;
+  --app-accent-hover: #fb7185;
+  --app-gradient-primary: linear-gradient(135deg, #f43f5e 0%, #f97316 100%);
+  --app-card-border: rgba(244, 63, 94, 0.25);
+  --app-card-bg: rgba(26, 14, 22, 0.65);
+  --app-badge-open: #f43f5e;
+}
+
+/* Modern Card Layouts */
+.card-glass-v2 {
+  background: var(--app-card-bg, rgba(13, 31, 45, 0.65));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--app-card-border, rgba(214, 190, 102, 0.22));
+  border-radius: 18px;
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card-glass-v2:hover {
+  transform: translateY(-2px);
+  border-color: var(--app-accent, #d6be66);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5), 0 0 15px rgba(214, 190, 102, 0.15);
+}
+
+.game-card-v2 {
+  background: var(--app-card-bg, rgba(13, 31, 45, 0.7));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--app-card-border, rgba(214, 190, 102, 0.22));
+  border-radius: 20px;
+  padding: 18px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.game-card-v2::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--app-gradient-primary, linear-gradient(135deg, #d6be66 0%, #10b981 100%));
+}
+
+.game-card-v2:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.quick-action-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.quick-action-pill:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--app-accent, #d6be66);
+  color: var(--app-accent, #d6be66);
+  transform: translateY(-2px);
+}
+
+.badge-open-v2 {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Mobile Responsive Bottom Navigation Dock */
+.bottom-nav-container {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 24px);
+  max-width: 500px;
+  height: 64px;
+  background-color: rgba(9, 18, 31, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 26px;
+  z-index: 999999 !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 8px;
+  transition: all 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .bottom-nav-container {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 0 !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-bottom: none !important;
+    height: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+    min-height: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: max(6px, env(safe-area-inset-bottom, 0px)) !important;
+    padding-top: 4px !important;
+    box-sizing: border-box !important;
+    background-color: #08111e !important;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5) !important;
+  }
+}
+
+/* Native Date & Time Picker UI Styling */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  color-scheme: light;
+  background-color: #ffffff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  outline: none;
+  font-family: inherit;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: none;
+  opacity: 0.7;
+  padding: 2px;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+/* Optional Dark Scheme Override for Dark Cards */
+.dark-date-input,
+[data-theme="dark"] input[type="date"] {
+  color-scheme: dark !important;
+  background-color: rgba(0, 0, 0, 0.3) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.dark-date-input::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.9);
+}
+
+
+
+
