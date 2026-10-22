@@ -1,6 +1,6 @@
 const db = require('../config/db');
 const jwt = require('jsonwebtoken');
-const { getISTDateTimeStr, getISTDateStr, getISTTimeStr } = require('../utils/istDate');
+const { getISTDateTimeStr, getISTDateStr, getISTTimeStr, getISTTime12h } = require('../utils/istDate');
 
 // User Registration
 exports.signup = async (req, res) => {
@@ -127,7 +127,7 @@ exports.signup = async (req, res) => {
             phone_number VARCHAR(50)
           )`);
           const currentDateStr = getISTDateStr();
-          const currentTimeStr = getISTTimeStr();
+          const currentTimeStr = getISTTime12h();
           await db.query(
             'INSERT INTO wallet_history (status, date, time, amount, updated_amount, remark, phone_number) VALUES (?, ?, ?, ?, ?, ?, ?)',
             ['1', currentDateStr, currentTimeStr, bonus, bonus, 'Welcome Bonus', user_phone]

@@ -1692,6 +1692,21 @@ const AdminDashboard = ({ setAdminAuth }) => {
       payload.close_result = declareCloseResult;
     }
 
+    const existingRow = declaredResultsList.find(
+      r => String(r.game_name).trim().toLowerCase() === String(targetGame).trim().toLowerCase() &&
+           (r.date === declareDate || String(r.date).startsWith(declareDate))
+    );
+    const isUpdate = declareSession === 'open' 
+      ? Boolean(existingRow && existingRow.open_panna && existingRow.open_digit)
+      : Boolean(existingRow && existingRow.close_panna && existingRow.close_digit);
+
+    if (isUpdate) {
+      const confirmUpdate = window.confirm(
+        `Result for "${targetGame}" (${declareSession.toUpperCase()}) on ${declareDate} is already declared!\n\nUpdating it will DEDUCT/REVERT previous winning amounts from user wallets (including Jodi and Sangam winnings) and credit new winners.\n\nDo you want to proceed?`
+      );
+      if (!confirmUpdate) return;
+    }
+
     setDeclareLoading(true);
     try {
       const res = await api.post('/admin/declare-result', payload, getHeaders());
@@ -1702,6 +1717,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
         setDeclareClosePana('');
         setDeclareCloseResult('');
         fetchDeclaredResults(declareDate);
+        fetchAdminCoins();
       } else {
         setDeclareError(res.data.msg || 'Declaration failed');
       }
@@ -7185,7 +7201,20 @@ const AdminDashboard = ({ setAdminAuth }) => {
                         transition: 'background 0.2s ease'
                       }}
                     >
-                      {declareLoading ? 'Declaring & Processing Payouts...' : 'DECLARE GAME RESULT'}
+                      {declareLoading
+                        ? 'Declaring & Processing Payouts...'
+                        : (() => {
+                            const curGame = declareSelectedGame || (games[0]?.games_name || '');
+                            const existing = declaredResultsList.find(
+                              r => String(r.game_name).trim().toLowerCase() === String(curGame).trim().toLowerCase() &&
+                                   (r.date === declareDate || String(r.date).startsWith(declareDate))
+                            );
+                            const alreadyDeclared = declareSession === 'open'
+                              ? Boolean(existing && existing.open_panna && existing.open_digit)
+                              : Boolean(existing && existing.close_panna && existing.close_digit);
+                            return alreadyDeclared ? '🔄 UPDATE RESULT & REVERT PREVIOUS PAYOUTS' : 'DECLARE GAME RESULT';
+                          })()
+                      }
                     </button>
                   </div>
                 </form>
@@ -7199,7 +7228,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                       Declared Results History
                     </h5>
                     <p style={{ margin: 0, fontSize: '0.8rem', color: '#74788d' }}>
-                      View declared results and delete/revert winning payouts if needed.
+                      View declared results, edit/update numbers, or delete to revert winning payouts.
                     </p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -7258,12 +7287,46 @@ const AdminDashboard = ({ setAdminAuth }) => {
                               )}
                             </td>
                             <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                              <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                              <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                                {row.open_panna && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDeclareSelectedGame(row.game_name);
+                                      setDeclareDate(row.date);
+                                      setDeclareSession('open');
+                                      setDeclareOpenPana(row.open_panna);
+                                      setDeclareOpenResult(row.open_digit);
+                                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }}
+                                    title="Edit Open Result"
+                                    style={{ padding: '4px 8px', fontSize: '0.75rem', backgroundColor: '#556ee6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                                  >
+                                    Edit Open
+                                  </button>
+                                )}
+                                {row.close_panna && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDeclareSelectedGame(row.game_name);
+                                      setDeclareDate(row.date);
+                                      setDeclareSession('close');
+                                      setDeclareClosePana(row.close_panna);
+                                      setDeclareCloseResult(row.close_digit);
+                                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }}
+                                    title="Edit Close Result"
+                                    style={{ padding: '4px 8px', fontSize: '0.75rem', backgroundColor: '#34c38f', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                                  >
+                                    Edit Close
+                                  </button>
+                                )}
                                 {row.open_panna && (
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteDeclaredResult(row.game_name, row.date, 'open')}
-                                    title="Delete Open Result and revert winning payouts"
+                                    title="Delete Open Result and revert winning payouts (including Jodi/Sangam)"
                                     style={{ padding: '4px 8px', fontSize: '0.75rem', backgroundColor: '#f87171', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
                                   >
                                     Delete Open
@@ -7273,7 +7336,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteDeclaredResult(row.game_name, row.date, 'close')}
-                                    title="Delete Close Result and revert winning payouts"
+                                    title="Delete Close Result and revert winning payouts (including Jodi/Sangam)"
                                     style={{ padding: '4px 8px', fontSize: '0.75rem', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
                                   >
                                     Delete Close

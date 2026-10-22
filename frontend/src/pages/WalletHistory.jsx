@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Wallet, Calendar, Filter, History, CheckCircle2 } from 'lucide-react';
 import api from '../utils/api';
-import { getISTTodayStr, getISTDaysAgoStr, formatDisplayDateTime } from '../utils/indianTime';
+import { getISTTodayStr, getISTDaysAgoStr, formatDisplayDateTime, parseDateTimeToEpoch } from '../utils/indianTime';
 
 const WalletHistory = () => {
   const [fromDate, setFromDate] = useState(getISTDaysAgoStr(6));
@@ -20,7 +20,17 @@ const WalletHistory = () => {
       ]);
 
       if (histRes.data.success === '1') {
-        setHistory(histRes.data.result || histRes.data.data || []);
+        const rawHistory = histRes.data.result || histRes.data.data || [];
+        // Ensure proper chronological sorting: newest first (by id DESC or parsed timestamp DESC)
+        const sorted = [...rawHistory].sort((a, b) => {
+          const idA = Number(a.id);
+          const idB = Number(b.id);
+          if (!isNaN(idA) && !isNaN(idB) && idA > 0 && idB > 0 && idA !== idB) {
+            return idB - idA;
+          }
+          return parseDateTimeToEpoch(b.date, b.time) - parseDateTimeToEpoch(a.date, a.time);
+        });
+        setHistory(sorted);
       }
       if (walRes.data.success === '1') {
         setWallet(walRes.data.data?.wallet || '0');
@@ -150,52 +160,60 @@ const WalletHistory = () => {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {history.map((item, idx) => (
-            <div
-              key={item.id || idx}
-              className="card-glass-v2"
-              style={{
-                borderRadius: '14px',
-                padding: '14px 16px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderLeft: '4px solid #10b981'
-              }}
-            >
-              <div>
-                <p style={{ margin: 0, fontWeight: '700', color: '#fff', fontSize: '0.9rem' }}>
-                  {item.remark || 'Transaction'}
-                </p>
-                <h5 style={{ margin: '4px 0 2px 0', color: '#10b981', fontWeight: '800', fontSize: '1.1rem' }}>
-                  ₹ {item.amount}
-                </h5>
-                <p style={{ margin: 0, fontSize: '0.78rem', color: 'rgba(255,255,255,0.65)' }}>
-                  {formatDisplayDateTime(item.date, item.time)}
-                </p>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{
-                  display: 'inline-flex',
+          {history.map((item, idx) => {
+            const isDebit = String(item.amount || '').trim().startsWith('-') ||
+              String(item.status || '') === '0' ||
+              /deduct|debit|revert|withdraw|bid/i.test(item.remark || '');
+            const rawAmt = String(item.amount || '0').replace(/^[+-]/, '').trim();
+            const badgeColor = isDebit ? '#ef4444' : '#10b981';
+
+            return (
+              <div
+                key={item.id || idx}
+                className="card-glass-v2"
+                style={{
+                  borderRadius: '14px',
+                  padding: '14px 16px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
-                  gap: '4px',
-                  color: '#10b981',
-                  fontWeight: '800',
-                  fontSize: '0.78rem',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px'
-                }}>
-                  <CheckCircle2 size={12} />
-                  SUCCESSFUL
-                </span>
-                {item.updated_amount !== undefined && item.updated_amount !== null && (
-                  <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
-                    Bal: ₹{item.updated_amount}
+                  borderLeft: `4px solid ${badgeColor}`
+                }}
+              >
+                <div>
+                  <p style={{ margin: 0, fontWeight: '700', color: '#fff', fontSize: '0.9rem' }}>
+                    {item.remark || 'Transaction'}
                   </p>
-                )}
+                  <h5 style={{ margin: '4px 0 2px 0', color: badgeColor, fontWeight: '800', fontSize: '1.1rem' }}>
+                    {isDebit ? `- ₹ ${rawAmt}` : `+ ₹ ${rawAmt}`}
+                  </h5>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'rgba(255,255,255,0.65)' }}>
+                    {formatDisplayDateTime(item.date, item.time)}
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    color: badgeColor,
+                    fontWeight: '800',
+                    fontSize: '0.78rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    <CheckCircle2 size={12} />
+                    {isDebit ? 'DEBITED' : 'SUCCESSFUL'}
+                  </span>
+                  {item.updated_amount !== undefined && item.updated_amount !== null && (
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
+                      Bal: ₹{item.updated_amount}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

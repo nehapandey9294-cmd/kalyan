@@ -298,16 +298,20 @@ exports.submitWithdrawRequest = async (req, res) => {
 
 // Get User Wallet History
 exports.getWalletHistory = async (req, res) => {
-  const phone = req.user.phone;
+  const phone = req.user?.phone;
   const { date1, date2 } = req.query;
   try {
-    let sql = "SELECT * FROM wallet_history WHERE phone_number = ?";
-    const params = [phone];
+    const rawPhone = String(phone || '').replace(/^\+91/, '').replace(/^91/, '').trim();
+    const phoneWithPlus = `+91${rawPhone}`;
+    const tenDigits = rawPhone.slice(-10);
+
+    let sql = "SELECT * FROM wallet_history WHERE (phone_number = ? OR phone_number = ? OR phone_number = ? OR RIGHT(phone_number, 10) = ?)";
+    const params = [phone, rawPhone, phoneWithPlus, tenDigits];
     if (date1 && date2) {
       sql += " AND date BETWEEN ? AND ?";
       params.push(date1, date2);
     }
-    sql += " ORDER BY date DESC, time DESC LIMIT 100";
+    sql += " ORDER BY id DESC LIMIT 100";
     const [history] = await db.query(sql, params);
     return res.json({ success: '1', data: history, result: history });
   } catch (err) {
@@ -318,16 +322,20 @@ exports.getWalletHistory = async (req, res) => {
 
 // Get User Withdrawal History
 exports.getWithdrawHistory = async (req, res) => {
-  const phone = req.user.phone;
+  const phone = req.user?.phone;
   const { date1, date2 } = req.query;
   try {
-    let sql = "SELECT * FROM user_withdraw_request WHERE username = ?";
-    const params = [phone];
+    const rawPhone = String(phone || '').replace(/^\+91/, '').replace(/^91/, '').trim();
+    const phoneWithPlus = `+91${rawPhone}`;
+    const tenDigits = rawPhone.slice(-10);
+
+    let sql = "SELECT * FROM user_withdraw_request WHERE (username = ? OR username = ? OR username = ? OR RIGHT(username, 10) = ?)";
+    const params = [phone, rawPhone, phoneWithPlus, tenDigits];
     if (date1 && date2) {
       sql += " AND date BETWEEN ? AND ?";
       params.push(date1, date2);
     }
-    sql += " ORDER BY date DESC LIMIT 100";
+    sql += " ORDER BY id DESC LIMIT 100";
     const [history] = await db.query(sql, params);
     return res.json({ success: '1', data: history, result: history });
   } catch (err) {

@@ -20,46 +20,77 @@ import {
   isPanaInFamily,
   getFamilyPanas,
   generateSPMotor,
-  generateDPMotor
+  generateDPMotor,
+  RED_BRACKETS_DOUBLES,
+  RED_BRACKETS_CUT,
+  RED_BRACKETS_ALL,
+  getFamilyJodis
 } from './panaUtils';
 import BidCartTable from './BidCartTable';
 import SearchableSelect from '../../components/common/SearchableSelect';
 
 const GAME_TYPES = [
+  'Single Digit',
   'Single Digit Bulk',
+  'Jodi',
   'Jodi Bulk',
+  'Single Pana',
   'Single Pana Bulk',
+  'Double Pana',
   'Double Pana Bulk',
   'Triple Pana',
   'Half Sangam',
   'Full Sangam',
   'SP Motor',
-  'DP Motor'
+  'DP Motor',
+  'Odd Even',
+  'Red Bracket',
+  'Group Jodi',
+  'SP DP TP'
 ];
 
 const normalizeGameType = (type) => {
-  if (!type) return 'Single Digit Bulk';
+  if (!type) return 'Single Digit';
   const clean = type.toLowerCase().replace(/_/g, ' ').trim();
+
+  // Bulk specific matches first
+  if (clean.includes('bulk')) {
+    if (clean.includes('single') && clean.includes('digit')) return 'Single Digit Bulk';
+    if (clean.includes('jodi')) return 'Jodi Bulk';
+    if (clean.includes('double') && clean.includes('pana')) return 'Double Pana Bulk';
+    if (clean.includes('single') && clean.includes('pana')) return 'Single Pana Bulk';
+    return 'Single Digit Bulk';
+  }
+
+  // Exact / specific names
+  if (clean.includes('odd') || clean.includes('even')) return 'Odd Even';
+  if (clean.includes('red') && clean.includes('bracket')) return 'Red Bracket';
+  if (clean.includes('group') && clean.includes('jodi')) return 'Group Jodi';
+  if (clean.includes('sp') && clean.includes('dp')) return 'SP DP TP';
   if (clean.includes('sp') && clean.includes('motor')) return 'SP Motor';
   if (clean.includes('dp') && clean.includes('motor')) return 'DP Motor';
   if (clean === 'sp motor' || clean === 'sp_motor') return 'SP Motor';
   if (clean === 'dp motor' || clean === 'dp_motor') return 'DP Motor';
-  if (clean.includes('single') && clean.includes('digit')) return 'Single Digit Bulk';
-  if (clean.includes('single') && clean.includes('ank')) return 'Single Digit Bulk';
-  if (clean.includes('jodi')) return 'Jodi Bulk';
-  if (clean.includes('double') && clean.includes('pana')) return 'Double Pana Bulk';
-  if (clean.includes('single') && clean.includes('pana')) return 'Single Pana Bulk';
-  if (clean.includes('triple')) return 'Triple Pana';
+  if (clean.includes('triple') || clean.includes('tripple')) return 'Triple Pana';
   if (clean.includes('half')) return 'Half Sangam';
   if (clean.includes('full')) return 'Full Sangam';
+
+  // Standard (non-bulk)
+  if (clean.includes('single') && clean.includes('digit')) return 'Single Digit';
+  if (clean.includes('single') && clean.includes('ank')) return 'Single Digit';
+  if (clean === 'single' || clean === 'single digits') return 'Single Digit';
+  if (clean.includes('jodi')) return 'Jodi';
+  if (clean.includes('double') && clean.includes('pana')) return 'Double Pana';
+  if (clean.includes('single') && clean.includes('pana')) return 'Single Pana';
+
   return type;
 };
 
 const getBackendGameType = (type) => {
   if (type === 'SP Motor') return 'SP Motor';
   if (type === 'DP Motor') return 'DP Motor';
-  if (type === 'Single Digit Bulk' || type === 'Single Digit') return 'Single Digit';
-  if (type === 'Jodi Bulk' || type === 'Jodi Digit' || type === 'Jodi') return 'Jodi Digit';
+  if (type === 'Single Digit Bulk' || type === 'Single Digit' || type === 'Odd Even') return 'Single Digit';
+  if (type === 'Jodi Bulk' || type === 'Jodi Digit' || type === 'Jodi' || type === 'Red Bracket' || type === 'Group Jodi') return 'Jodi Digit';
   if (type === 'Single Pana Bulk' || type === 'Single Pana') return 'Single Pana';
   if (type === 'Double Pana Bulk' || type === 'Double Pana') return 'Double Pana';
   if (type === 'Triple Pana') return 'Triple Pana';
@@ -86,7 +117,7 @@ const PlayGame = () => {
   const [maxBid, setMaxBid] = useState(50000);
 
   // Active game type tab
-  const initialType = normalizeGameType(searchParams.get('type') || 'Single Digit Bulk');
+  const initialType = normalizeGameType(searchParams.get('type') || 'Single Digit');
   const [selectedType, setSelectedType] = useState(initialType);
 
   // Core Inputs
@@ -99,10 +130,18 @@ const PlayGame = () => {
   const [activeSinglePanaAnk, setActiveSinglePanaAnk] = useState('1');
   const [activeDoublePanaAnk, setActiveDoublePanaAnk] = useState('1');
 
-  // Manual typing inputs for Bulk games
+  // Manual typing inputs
+  const [manualSingleDigit, setManualSingleDigit] = useState('');
   const [manualJodi, setManualJodi] = useState('');
   const [manualSinglePana, setManualSinglePana] = useState('');
   const [manualDoublePana, setManualDoublePana] = useState('');
+
+  // Additional game type states
+  const [oddEvenChoice, setOddEvenChoice] = useState('odd');
+  const [redBracketTab, setRedBracketTab] = useState('all');
+  const [groupJodiInput, setGroupJodiInput] = useState('');
+  const [spDpTpAnk, setSpDpTpAnk] = useState('1');
+  const [spDpTpSelections, setSpDpTpSelections] = useState({ sp: true, dp: true, tp: false });
 
   // Sangam specific fields
   const [halfType, setHalfType] = useState('OD_CP'); // 'OD_CP' or 'OP_CD'
@@ -280,9 +319,26 @@ const PlayGame = () => {
     return () => clearInterval(interval);
   }, [gameInfo]);
 
+  useEffect(() => {
+    const pType = searchParams.get('type');
+    if (pType) {
+      const norm = normalizeGameType(pType);
+      if (norm !== selectedType) {
+        setSelectedType(norm);
+      }
+    }
+  }, [searchParams]);
+
+  const handleSelectTypeTab = (type) => {
+    setSelectedType(type);
+    const params = new URLSearchParams(searchParams);
+    params.set('type', type);
+    navigate(`/play-game?${params.toString()}`, { replace: true });
+  };
+
   // Sangam, Jodi, Motor, and Full Day indicators
   const isSangam = selectedType === 'Half Sangam' || selectedType === 'Full Sangam';
-  const isJodiType = selectedType === 'Jodi Bulk' || selectedType === 'Jodi Digit';
+  const isJodiType = selectedType === 'Jodi Bulk' || selectedType === 'Jodi Digit' || selectedType === 'Jodi' || selectedType === 'Red Bracket' || selectedType === 'Group Jodi';
   const isMotorType = selectedType === 'SP Motor' || selectedType === 'DP Motor';
   const isSPMotor = selectedType === 'SP Motor';
   const isFullDayType = isJodiType || isSangam;
@@ -386,6 +442,84 @@ const PlayGame = () => {
             open_pana: 'NA',
             close_pana: 'NA',
             display_number: digit,
+            points_action: pts
+          });
+        }
+      });
+      return current;
+    });
+  };
+
+  // Manual Single Digit direct add
+  const handleAddManualSingleDigit = (e) => {
+    e?.preventDefault();
+    if (!/^\d$/.test(manualSingleDigit)) {
+      showMaterialDialog('warning', 'Invalid Digit', 'Please enter a valid single digit (0-9)');
+      return;
+    }
+    handleToggleSingleDigit(manualSingleDigit);
+    setManualSingleDigit('');
+  };
+
+  // Group Jodi Add (Family Jodis)
+  const handleAddGroupJodi = (e) => {
+    e?.preventDefault();
+    if (!/^\d{2}$/.test(groupJodiInput)) {
+      showMaterialDialog('warning', 'Invalid Jodi', 'Please enter a 2-digit base Jodi (00-99)');
+      return;
+    }
+    const family = getFamilyJodis(groupJodiInput);
+    if (family.length === 0) return;
+    family.forEach(j => handleToggleJodi(j));
+  };
+
+  // SP DP TP Add (Batch by Ank)
+  const handleAddSpDpTp = () => {
+    const pts = getValidatedPoints();
+    if (!pts) return;
+    if (effectiveSession === 'Open' && !marketStatus.isOpenSession) {
+      showMaterialDialog('warning', 'Session Closed', 'Open session is closed for this market.');
+      return;
+    }
+
+    const panasToAdd = [];
+    if (spDpTpSelections.sp) {
+      SINGLE_PANAS.filter(p => getPanaAnk(p) === spDpTpAnk).forEach(p => panasToAdd.push({ type: 'Single Pana', pana: p }));
+    }
+    if (spDpTpSelections.dp) {
+      DOUBLE_PANAS.filter(p => getPanaAnk(p) === spDpTpAnk).forEach(p => panasToAdd.push({ type: 'Double Pana', pana: p }));
+    }
+    if (spDpTpSelections.tp) {
+      TRIPLE_PANAS.filter(p => getPanaAnk(p) === spDpTpAnk).forEach(p => panasToAdd.push({ type: 'Triple Pana', pana: p }));
+    }
+
+    if (panasToAdd.length === 0) {
+      showMaterialDialog('warning', 'Selection Missing', 'Please select at least one pana type (SP, DP, or TP).');
+      return;
+    }
+
+    setStagedBids(prev => {
+      let current = [...prev];
+      panasToAdd.forEach(({ type, pana }) => {
+        const idx = current.findIndex(b =>
+          b.game_type === type &&
+          b.session === effectiveSession &&
+          b.display_number === pana
+        );
+        if (idx >= 0) {
+          current[idx] = {
+            ...current[idx],
+            points_action: Number(current[idx].points_action || 0) + pts
+          };
+        } else {
+          current.push({
+            game_type: type,
+            session: effectiveSession,
+            open_digit: 'NA',
+            close_digit: 'NA',
+            open_pana: effectiveSession === 'Open' ? pana : 'NA',
+            close_pana: effectiveSession === 'Close' ? pana : 'NA',
+            display_number: pana,
             points_action: pts
           });
         }
@@ -898,7 +1032,7 @@ const PlayGame = () => {
             <button
               key={type}
               type="button"
-              onClick={() => setSelectedType(type)}
+              onClick={() => handleSelectTypeTab(type)}
               style={{
                 padding: '8px 14px',
                 borderRadius: '10px',
@@ -1088,950 +1222,2167 @@ const PlayGame = () => {
           ) : (
             <>
               {/* Row 1: Date Pill + Session Selector */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            {/* Date Display Pill */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              height: '46px',
-              padding: '0 14px',
-              borderRadius: '12px',
-              border: '1.5px solid #cbd5e1',
-              background: '#f8fafc',
-              color: '#1e293b',
-              fontWeight: 700,
-              fontSize: '14px'
-            }}>
-              <span>{displayDate}</span>
-              <Calendar size={18} color="#f59e0b" />
-            </div>
-
-            {/* Session Selector Dropdown */}
-            {isSangam ? (
-              <div style={{
-                height: '46px',
-                borderRadius: '12px',
-                background: 'rgba(245, 158, 11, 0.12)',
-                border: '1.5px solid rgba(245, 158, 11, 0.4)',
-                color: '#d97706',
-                fontWeight: 800,
-                fontSize: '13px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '0 10px'
-              }}>
-                Open & Close
-              </div>
-            ) : isJodiType ? (
-              <div style={{
-                height: '46px',
-                borderRadius: '12px',
-                background: 'rgba(245, 158, 11, 0.12)',
-                border: '1.5px solid rgba(245, 158, 11, 0.4)',
-                color: '#d97706',
-                fontWeight: 800,
-                fontSize: '13px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '0 10px'
-              }}>
-                Full Day Market
-              </div>
-            ) : (
-              <select
-                value={session}
-                onChange={(e) => setSession(e.target.value)}
-                style={{
-                  width: '100%',
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                {/* Date Display Pill */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
                   height: '46px',
-                  padding: '0 12px',
+                  padding: '0 14px',
                   borderRadius: '12px',
                   border: '1.5px solid #cbd5e1',
                   background: '#f8fafc',
                   color: '#1e293b',
-                  fontSize: '14px',
                   fontWeight: 700,
-                  outline: 'none',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="Open" disabled={!marketStatus.isOpenSession}>
-                  Open {!marketStatus.isOpenSession ? '(Closed)' : ''}
-                </option>
-                <option value="Close">Close</option>
-              </select>
-            )}
-          </div>
+                  fontSize: '14px'
+                }}>
+                  <span>{displayDate}</span>
+                  <Calendar size={18} color="#f59e0b" />
+                </div>
 
-          {/* Row 2: Enter Points Input */}
-          <div>
-            <label style={{
-              display: 'block',
-              fontSize: '13px',
-              color: '#64748b',
-              fontWeight: 700,
-              marginBottom: '6px'
-            }}>
-              Enter Points:
-            </label>
-            <input
-              type="number"
-              min={minBid}
-              max={maxBid}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="10"
-              style={{
-                width: '100%',
-                height: '48px',
-                padding: '0 14px',
-                borderRadius: '12px',
-                border: '1.5px solid #cbd5e1',
-                background: '#f8fafc',
-                color: '#0f172a',
-                fontSize: '16px',
-                fontWeight: 800,
-                outline: 'none'
-              }}
-            />
-          </div>
-
-          {/* GAME SPECIFIC CLICK-TO-ADD BOARDS */}
-
-          {/* 1. SINGLE DIGIT BULK BOARD (Matches Screenshot Exactly) */}
-          {selectedType === 'Single Digit Bulk' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {/* Batch Quick Filter Pills */}
-              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none' }}>
-                <button
-                  type="button"
-                  onClick={() => handleBatchSingleDigit('all')}
-                  style={{
-                    padding: '5px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    background: '#f1f5f9',
-                    color: '#334155',
-                    fontSize: '11.5px',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  All (0-9)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleBatchSingleDigit('even')}
-                  style={{
-                    padding: '5px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    background: '#f1f5f9',
-                    color: '#334155',
-                    fontSize: '11.5px',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Even (0,2,4,6,8)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleBatchSingleDigit('odd')}
-                  style={{
-                    padding: '5px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    background: '#f1f5f9',
-                    color: '#334155',
-                    fontSize: '11.5px',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Odd (1,3,5,7,9)
-                </button>
+                {/* Session Selector Dropdown */}
+                {isSangam ? (
+                  <div style={{
+                    height: '46px',
+                    borderRadius: '12px',
+                    background: 'rgba(245, 158, 11, 0.12)',
+                    border: '1.5px solid rgba(245, 158, 11, 0.4)',
+                    color: '#d97706',
+                    fontWeight: 800,
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0 10px'
+                  }}>
+                    Open & Close
+                  </div>
+                ) : isJodiType ? (
+                  <div style={{
+                    height: '46px',
+                    borderRadius: '12px',
+                    background: 'rgba(245, 158, 11, 0.12)',
+                    border: '1.5px solid rgba(245, 158, 11, 0.4)',
+                    color: '#d97706',
+                    fontWeight: 800,
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0 10px'
+                  }}>
+                    Full Day Market
+                  </div>
+                ) : (
+                  <select
+                    value={session}
+                    onChange={(e) => setSession(e.target.value)}
+                    style={{
+                      width: '100%',
+                      height: '46px',
+                      padding: '0 12px',
+                      borderRadius: '12px',
+                      border: '1.5px solid #cbd5e1',
+                      background: '#f8fafc',
+                      color: '#1e293b',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="Open" disabled={!marketStatus.isOpenSession}>
+                      Open {!marketStatus.isOpenSession ? '(Closed)' : ''}
+                    </option>
+                    <option value="Close">Close</option>
+                  </select>
+                )}
               </div>
 
-              {/* 10 Buttons Grid: Row 1 (1-5) and Row 2 (6-0) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
-                {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map(d => {
-                  const cartAmt = getNumberCartAmount(d);
-                  return (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => handleToggleSingleDigit(d)}
-                      style={{
-                        position: 'relative',
-                        height: '52px',
-                        borderRadius: '12px',
-                        border: 'none',
-                        background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
-                        color: '#421d00',
-                        fontSize: '19px',
-                        fontWeight: 900,
-                        cursor: 'pointer',
-                        boxShadow: '0 4px 10px rgba(245, 158, 11, 0.35)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'transform 0.1s ease'
-                      }}
-                      onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
-                      onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-                    >
-                      {d}
-                      {cartAmt && (
-                        <span style={{
-                          position: 'absolute',
-                          top: '-4px',
-                          right: '-4px',
-                          background: '#0f172a',
-                          color: '#f59e0b',
-                          fontSize: '9px',
-                          fontWeight: 800,
-                          padding: '1px 4px',
-                          borderRadius: '6px',
-                          border: '1px solid #f59e0b'
-                        }}>
-                          ₹{cartAmt}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 2. JODI BULK BOARD (Click to add Jodis + Ank Filter) */}
-          {selectedType === 'Jodi Bulk' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {/* Ank Filter Tabs (0-9 + Doubles) */}
-              <div style={{
-                display: 'flex',
-                gap: '6px',
-                overflowX: 'auto',
-                scrollbarWidth: 'none',
-                paddingBottom: '2px'
-              }}>
-                {['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'doubles'].map(ank => {
-                  const isActive = activeJodiAnk === ank;
-                  return (
-                    <button
-                      key={ank}
-                      type="button"
-                      onClick={() => setActiveJodiAnk(ank)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: '8px',
-                        border: isActive ? '1.5px solid #d97706' : '1px solid #cbd5e1',
-                        background: isActive ? '#fef3c7' : '#f8fafc',
-                        color: isActive ? '#b45309' : '#475569',
-                        fontSize: '12px',
-                        fontWeight: 800,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        flexShrink: 0
-                      }}
-                    >
-                      {ank === 'doubles' ? 'Doubles' : `Ank ${ank}`}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Quick Action: Add all 10 Jodis of selected Ank */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
-                  Tap any Jodi to add bet:
-                </span>
-                <button
-                  type="button"
-                  onClick={handleAddAllAnkJodis}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    border: '1px solid #d97706',
-                    background: '#fffbeb',
-                    color: '#b45309',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  + Add All 10 Jodis
-                </button>
-              </div>
-
-              {/* 10 Jodi Buttons Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
-                {(activeJodiAnk === 'doubles'
-                  ? ['00', '11', '22', '33', '44', '55', '66', '77', '88', '99']
-                  : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => `${activeJodiAnk}${i}`)
-                ).map(jodi => {
-                  const cartAmt = getNumberCartAmount(jodi);
-                  return (
-                    <button
-                      key={jodi}
-                      type="button"
-                      onClick={() => handleToggleJodi(jodi)}
-                      style={{
-                        position: 'relative',
-                        height: '46px',
-                        borderRadius: '10px',
-                        border: 'none',
-                        background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
-                        color: '#421d00',
-                        fontSize: '16px',
-                        fontWeight: 900,
-                        cursor: 'pointer',
-                        boxShadow: '0 3px 8px rgba(245, 158, 11, 0.28)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'transform 0.1s ease'
-                      }}
-                      onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
-                      onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-                    >
-                      {jodi}
-                      {cartAmt && (
-                        <span style={{
-                          position: 'absolute',
-                          top: '-4px',
-                          right: '-4px',
-                          background: '#0f172a',
-                          color: '#f59e0b',
-                          fontSize: '8.5px',
-                          fontWeight: 800,
-                          padding: '1px 3px',
-                          borderRadius: '5px',
-                          border: '1px solid #f59e0b'
-                        }}>
-                          ₹{cartAmt}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Manual Direct 2-digit Typing Box */}
-              <div style={{
-                display: 'flex',
-                gap: '8px',
-                marginTop: '4px',
-                paddingTop: '8px',
-                borderTop: '1px dashed #e2e8f0'
-              }}>
+              {/* Row 2: Enter Points Input */}
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: '13px',
+                  color: '#64748b',
+                  fontWeight: 700,
+                  marginBottom: '6px'
+                }}>
+                  Enter Points:
+                </label>
                 <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={2}
-                  placeholder="Or enter Jodi directly (e.g. 45)"
-                  value={manualJodi}
-                  onChange={(e) => setManualJodi(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                  type="number"
+                  min={minBid}
+                  max={maxBid}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="10"
                   style={{
-                    flex: 1,
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    width: '100%',
+                    height: '48px',
+                    padding: '0 14px',
+                    borderRadius: '12px',
+                    border: '1.5px solid #cbd5e1',
                     background: '#f8fafc',
                     color: '#0f172a',
-                    fontSize: '13px',
-                    fontWeight: 700,
+                    fontSize: '16px',
+                    fontWeight: 800,
                     outline: 'none'
                   }}
                 />
-                <button
-                  type="button"
-                  onClick={() => {
+              </div>
+
+              {/* GAME SPECIFIC CLICK-TO-ADD BOARDS */}
+
+              {/* 1. SINGLE DIGIT (Standard / Manual Input + Quick Tap Board) */}
+              {selectedType === 'Single Digit' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Direct Single Digit Input Bar */}
+                  <form onSubmit={handleAddManualSingleDigit} style={{
+                    display: 'flex',
+                    gap: '8px',
+                    alignItems: 'flex-end',
+                    background: '#f8fafc',
+                    padding: '10px 12px',
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>
+                        Enter Single Digit (0-9):
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={manualSingleDigit}
+                        onChange={(e) => setManualSingleDigit(e.target.value.replace(/\D/g, '').slice(0, 1))}
+                        placeholder="Type digit (0-9)"
+                        style={{
+                          width: '100%',
+                          height: '42px',
+                          padding: '0 12px',
+                          borderRadius: '10px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: '#0f172a',
+                          fontSize: '16px',
+                          fontWeight: 800,
+                          outline: 'none'
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      style={{
+                        height: '42px',
+                        padding: '0 18px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        color: '#ffffff',
+                        fontWeight: 800,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: '0 4px 10px rgba(245, 158, 11, 0.3)',
+                        flexShrink: 0
+                      }}
+                    >
+                      <Plus size={16} strokeWidth={2.6} /> Add Bid
+                    </button>
+                  </form>
+
+                  {/* Batch Quick Filter Pills */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                      Or tap digit below:
+                    </span>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleBatchSingleDigit('all')}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          background: '#f1f5f9',
+                          color: '#334155',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        All (0-9)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBatchSingleDigit('even')}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          background: '#f1f5f9',
+                          color: '#334155',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Even
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBatchSingleDigit('odd')}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          background: '#f1f5f9',
+                          color: '#334155',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Odd
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 10 Buttons Grid: Row 1 (1-5) and Row 2 (6-0) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map(d => {
+                      const cartAmt = getNumberCartAmount(d);
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => handleToggleSingleDigit(d)}
+                          style={{
+                            position: 'relative',
+                            height: '52px',
+                            borderRadius: '12px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
+                            color: '#421d00',
+                            fontSize: '19px',
+                            fontWeight: 900,
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 10px rgba(245, 158, 11, 0.35)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'transform 0.1s ease'
+                          }}
+                          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
+                          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                        >
+                          {d}
+                          {cartAmt && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              background: '#0f172a',
+                              color: '#f59e0b',
+                              fontSize: '9px',
+                              fontWeight: 800,
+                              padding: '1px 4px',
+                              borderRadius: '6px',
+                              border: '1px solid #f59e0b'
+                            }}>
+                              ₹{cartAmt}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 1. SINGLE DIGIT BULK BOARD (Matches Screenshot Exactly) */}
+              {selectedType === 'Single Digit Bulk' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {/* Batch Quick Filter Pills */}
+                  <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleBatchSingleDigit('all')}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        background: '#f1f5f9',
+                        color: '#334155',
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      All (0-9)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBatchSingleDigit('even')}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        background: '#f1f5f9',
+                        color: '#334155',
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Even (0,2,4,6,8)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBatchSingleDigit('odd')}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        background: '#f1f5f9',
+                        color: '#334155',
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Odd (1,3,5,7,9)
+                    </button>
+                  </div>
+
+                  {/* 10 Buttons Grid: Row 1 (1-5) and Row 2 (6-0) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map(d => {
+                      const cartAmt = getNumberCartAmount(d);
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => handleToggleSingleDigit(d)}
+                          style={{
+                            position: 'relative',
+                            height: '52px',
+                            borderRadius: '12px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
+                            color: '#421d00',
+                            fontSize: '19px',
+                            fontWeight: 900,
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 10px rgba(245, 158, 11, 0.35)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'transform 0.1s ease'
+                          }}
+                          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
+                          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                        >
+                          {d}
+                          {cartAmt && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              background: '#0f172a',
+                              color: '#f59e0b',
+                              fontSize: '9px',
+                              fontWeight: 800,
+                              padding: '1px 4px',
+                              borderRadius: '6px',
+                              border: '1px solid #f59e0b'
+                            }}>
+                              ₹{cartAmt}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 2. JODI (Standard Mode with Direct Input + Ank Grid) */}
+              {selectedType === 'Jodi' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Direct Jodi Input Bar */}
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
                     if (manualJodi.length === 2) {
                       handleToggleJodi(manualJodi);
                       setManualJodi('');
                     } else {
-                      showMaterialDialog('warning', 'Invalid Jodi', 'Please enter a 2-digit Jodi');
+                      showMaterialDialog('warning', 'Invalid Jodi', 'Please enter a 2-digit Jodi (00-99)');
                     }
-                  }}
-                  style={{
-                    padding: '0 16px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: '#0f172a',
-                    color: '#fff',
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    cursor: 'pointer'
-                  }}
-                >
-                  + Add
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* 3. SINGLE PANA BULK BOARD (Click to add Panas + Ank Filter) */}
-          {selectedType === 'Single Pana Bulk' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {/* Ank Filter Tabs (1-9, 0) */}
-              <div style={{
-                display: 'flex',
-                gap: '6px',
-                overflowX: 'auto',
-                scrollbarWidth: 'none',
-                paddingBottom: '2px'
-              }}>
-                {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map(ank => {
-                  const isActive = activeSinglePanaAnk === ank;
-                  return (
+                  }} style={{
+                    display: 'flex',
+                    gap: '8px',
+                    alignItems: 'flex-end',
+                    background: '#f8fafc',
+                    padding: '10px 12px',
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>
+                        Enter Jodi (00-99):
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={2}
+                        value={manualJodi}
+                        onChange={(e) => setManualJodi(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                        placeholder="Type Jodi (e.g. 45)"
+                        style={{
+                          width: '100%',
+                          height: '42px',
+                          padding: '0 12px',
+                          borderRadius: '10px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: '#0f172a',
+                          fontSize: '16px',
+                          fontWeight: 800,
+                          outline: 'none'
+                        }}
+                      />
+                    </div>
                     <button
-                      key={ank}
-                      type="button"
-                      onClick={() => setActiveSinglePanaAnk(ank)}
+                      type="submit"
                       style={{
-                        padding: '6px 12px',
-                        borderRadius: '8px',
-                        border: isActive ? '1.5px solid #d97706' : '1px solid #cbd5e1',
-                        background: isActive ? '#fef3c7' : '#f8fafc',
-                        color: isActive ? '#b45309' : '#475569',
-                        fontSize: '12px',
+                        height: '42px',
+                        padding: '0 18px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        color: '#ffffff',
                         fontWeight: 800,
+                        fontSize: '13px',
                         cursor: 'pointer',
-                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: '0 4px 10px rgba(245, 158, 11, 0.3)',
                         flexShrink: 0
                       }}
                     >
-                      Ank {ank}
+                      <Plus size={16} strokeWidth={2.6} /> Add Bid
                     </button>
-                  );
-                })}
-              </div>
+                  </form>
 
-              {/* Quick Action: Add all 12 Panas */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
-                  Tap any Pana of Ank {activeSinglePanaAnk} to add:
-                </span>
-                <button
-                  type="button"
-                  onClick={handleAddAllSinglePanasOfAnk}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    border: '1px solid #d97706',
-                    background: '#fffbeb',
-                    color: '#b45309',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  + Add All 12 Panas
-                </button>
-              </div>
+                  {/* Ank Filter Tabs (0-9 + Doubles) */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '6px',
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                    paddingBottom: '2px'
+                  }}>
+                    {['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'doubles'].map(ank => {
+                      const isActive = activeJodiAnk === ank;
+                      return (
+                        <button
+                          key={ank}
+                          type="button"
+                          onClick={() => setActiveJodiAnk(ank)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            border: isActive ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                            background: isActive ? '#fef3c7' : '#f8fafc',
+                            color: isActive ? '#b45309' : '#475569',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0
+                          }}
+                        >
+                          {ank === 'doubles' ? 'Doubles' : `Ank ${ank}`}
+                        </button>
+                      );
+                    })}
+                  </div>
 
-              {/* 12 Single Panas Grid (4 columns) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                {SINGLE_PANAS.filter(p => getPanaAnk(p) === activeSinglePanaAnk).map(pana => {
-                  const cartAmt = getNumberCartAmount(pana);
-                  return (
+                  {/* Quick Action: Add all 10 Jodis of selected Ank */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                      Tap any Jodi to add bet:
+                    </span>
                     <button
-                      key={pana}
                       type="button"
-                      onClick={() => handleToggleSinglePana(pana)}
+                      onClick={handleAddAllAnkJodis}
                       style={{
-                        position: 'relative',
-                        height: '44px',
-                        borderRadius: '10px',
-                        border: 'none',
-                        background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
-                        color: '#421d00',
-                        fontSize: '15px',
-                        fontWeight: 900,
-                        cursor: 'pointer',
-                        boxShadow: '0 3px 8px rgba(245, 158, 11, 0.28)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'transform 0.1s ease'
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #d97706',
+                        background: '#fffbeb',
+                        color: '#b45309',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
                       }}
-                      onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
-                      onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
                     >
-                      {pana}
-                      {cartAmt && (
-                        <span style={{
-                          position: 'absolute',
-                          top: '-4px',
-                          right: '-4px',
-                          background: '#0f172a',
-                          color: '#f59e0b',
-                          fontSize: '8px',
-                          fontWeight: 800,
-                          padding: '1px 3px',
-                          borderRadius: '5px',
-                          border: '1px solid #f59e0b'
-                        }}>
-                          ₹{cartAmt}
-                        </span>
-                      )}
+                      + Add All 10 Jodis
                     </button>
-                  );
-                })}
-              </div>
+                  </div>
 
-              {/* Manual Direct 3-digit Typing Box */}
-              <div style={{
-                display: 'flex',
-                gap: '8px',
-                marginTop: '4px',
-                paddingTop: '8px',
-                borderTop: '1px dashed #e2e8f0'
-              }}>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={3}
-                  placeholder="Or enter 3-digit Pana (e.g. 128)"
-                  value={manualSinglePana}
-                  onChange={(e) => setManualSinglePana(e.target.value.replace(/\D/g, '').slice(0, 3))}
-                  style={{
-                    flex: 1,
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    background: '#f8fafc',
-                    color: '#0f172a',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    outline: 'none'
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
+                  {/* 10 Jodi Buttons Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                    {(activeJodiAnk === 'doubles'
+                      ? ['00', '11', '22', '33', '44', '55', '66', '77', '88', '99']
+                      : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => `${activeJodiAnk}${i}`)
+                    ).map(jodi => {
+                      const cartAmt = getNumberCartAmount(jodi);
+                      return (
+                        <button
+                          key={jodi}
+                          type="button"
+                          onClick={() => handleToggleJodi(jodi)}
+                          style={{
+                            position: 'relative',
+                            height: '46px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
+                            color: '#421d00',
+                            fontSize: '16px',
+                            fontWeight: 900,
+                            cursor: 'pointer',
+                            boxShadow: '0 3px 8px rgba(245, 158, 11, 0.28)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'transform 0.1s ease'
+                          }}
+                          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
+                          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                        >
+                          {jodi}
+                          {cartAmt && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              background: '#0f172a',
+                              color: '#f59e0b',
+                              fontSize: '8.5px',
+                              fontWeight: 800,
+                              padding: '1px 3px',
+                              borderRadius: '5px',
+                              border: '1px solid #f59e0b'
+                            }}>
+                              ₹{cartAmt}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 2. JODI BULK BOARD (Click to add Jodis + Ank Filter) */}
+              {selectedType === 'Jodi Bulk' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Ank Filter Tabs (0-9 + Doubles) */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '6px',
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                    paddingBottom: '2px'
+                  }}>
+                    {['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'doubles'].map(ank => {
+                      const isActive = activeJodiAnk === ank;
+                      return (
+                        <button
+                          key={ank}
+                          type="button"
+                          onClick={() => setActiveJodiAnk(ank)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            border: isActive ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                            background: isActive ? '#fef3c7' : '#f8fafc',
+                            color: isActive ? '#b45309' : '#475569',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0
+                          }}
+                        >
+                          {ank === 'doubles' ? 'Doubles' : `Ank ${ank}`}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Quick Action: Add all 10 Jodis of selected Ank */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                      Tap any Jodi to add bet:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddAllAnkJodis}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #d97706',
+                        background: '#fffbeb',
+                        color: '#b45309',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      + Add All 10 Jodis
+                    </button>
+                  </div>
+
+                  {/* 10 Jodi Buttons Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                    {(activeJodiAnk === 'doubles'
+                      ? ['00', '11', '22', '33', '44', '55', '66', '77', '88', '99']
+                      : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => `${activeJodiAnk}${i}`)
+                    ).map(jodi => {
+                      const cartAmt = getNumberCartAmount(jodi);
+                      return (
+                        <button
+                          key={jodi}
+                          type="button"
+                          onClick={() => handleToggleJodi(jodi)}
+                          style={{
+                            position: 'relative',
+                            height: '46px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
+                            color: '#421d00',
+                            fontSize: '16px',
+                            fontWeight: 900,
+                            cursor: 'pointer',
+                            boxShadow: '0 3px 8px rgba(245, 158, 11, 0.28)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'transform 0.1s ease'
+                          }}
+                          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
+                          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                        >
+                          {jodi}
+                          {cartAmt && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              background: '#0f172a',
+                              color: '#f59e0b',
+                              fontSize: '8.5px',
+                              fontWeight: 800,
+                              padding: '1px 3px',
+                              borderRadius: '5px',
+                              border: '1px solid #f59e0b'
+                            }}>
+                              ₹{cartAmt}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Manual Direct 2-digit Typing Box */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '8px',
+                    marginTop: '4px',
+                    paddingTop: '8px',
+                    borderTop: '1px dashed #e2e8f0'
+                  }}>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={2}
+                      placeholder="Or enter Jodi directly (e.g. 45)"
+                      value={manualJodi}
+                      onChange={(e) => setManualJodi(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                      style={{
+                        flex: 1,
+                        height: '40px',
+                        padding: '0 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        background: '#f8fafc',
+                        color: '#0f172a',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        outline: 'none'
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (manualJodi.length === 2) {
+                          handleToggleJodi(manualJodi);
+                          setManualJodi('');
+                        } else {
+                          showMaterialDialog('warning', 'Invalid Jodi', 'Please enter a 2-digit Jodi');
+                        }
+                      }}
+                      style={{
+                        padding: '0 16px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: '#0f172a',
+                        color: '#fff',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 3. SINGLE PANA (Standard Mode with Direct Input + Ank Grid) */}
+              {selectedType === 'Single Pana' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Direct Single Pana Input Bar */}
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
                     const norm = normalizePana(manualSinglePana);
                     if (isValidSinglePana(norm)) {
                       handleToggleSinglePana(norm);
                       setManualSinglePana('');
                     } else {
-                      showMaterialDialog('warning', 'Invalid Pana', `${manualSinglePana} is not a valid Single Pana.`);
+                      showMaterialDialog('warning', 'Invalid Single Pana', `${manualSinglePana || 'Empty'} is not a valid Single Pana.`);
                     }
-                  }}
-                  style={{
-                    padding: '0 16px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: '#0f172a',
-                    color: '#fff',
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    cursor: 'pointer'
-                  }}
-                >
-                  + Add
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* 4. DOUBLE PANA BULK BOARD (Click to add Panas + Ank Filter) */}
-          {selectedType === 'Double Pana Bulk' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {/* Ank Filter Tabs (1-9, 0) */}
-              <div style={{
-                display: 'flex',
-                gap: '6px',
-                overflowX: 'auto',
-                scrollbarWidth: 'none',
-                paddingBottom: '2px'
-              }}>
-                {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map(ank => {
-                  const isActive = activeDoublePanaAnk === ank;
-                  return (
+                  }} style={{
+                    display: 'flex',
+                    gap: '8px',
+                    alignItems: 'flex-end',
+                    background: '#f8fafc',
+                    padding: '10px 12px',
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>
+                        Enter Single Pana (3 digits, e.g. 128):
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={3}
+                        value={manualSinglePana}
+                        onChange={(e) => setManualSinglePana(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                        placeholder="Type Single Pana (e.g. 128)"
+                        style={{
+                          width: '100%',
+                          height: '42px',
+                          padding: '0 12px',
+                          borderRadius: '10px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: '#0f172a',
+                          fontSize: '16px',
+                          fontWeight: 800,
+                          outline: 'none'
+                        }}
+                      />
+                    </div>
                     <button
-                      key={ank}
-                      type="button"
-                      onClick={() => setActiveDoublePanaAnk(ank)}
+                      type="submit"
                       style={{
-                        padding: '6px 12px',
-                        borderRadius: '8px',
-                        border: isActive ? '1.5px solid #d97706' : '1px solid #cbd5e1',
-                        background: isActive ? '#fef3c7' : '#f8fafc',
-                        color: isActive ? '#b45309' : '#475569',
-                        fontSize: '12px',
+                        height: '42px',
+                        padding: '0 18px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        color: '#ffffff',
                         fontWeight: 800,
+                        fontSize: '13px',
                         cursor: 'pointer',
-                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: '0 4px 10px rgba(245, 158, 11, 0.3)',
                         flexShrink: 0
                       }}
                     >
-                      Ank {ank}
+                      <Plus size={16} strokeWidth={2.6} /> Add Bid
                     </button>
-                  );
-                })}
-              </div>
+                  </form>
 
-              {/* Quick Action: Add all Double Panas of Ank */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
-                  Tap any Double Pana of Ank {activeDoublePanaAnk} to add:
-                </span>
-                <button
-                  type="button"
-                  onClick={handleAddAllDoublePanasOfAnk}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    border: '1px solid #d97706',
-                    background: '#fffbeb',
-                    color: '#b45309',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  + Add All Panas
-                </button>
-              </div>
+                  {/* Ank Filter Tabs (1-9, 0) */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '6px',
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                    paddingBottom: '2px'
+                  }}>
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map(ank => {
+                      const isActive = activeSinglePanaAnk === ank;
+                      return (
+                        <button
+                          key={ank}
+                          type="button"
+                          onClick={() => setActiveSinglePanaAnk(ank)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            border: isActive ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                            background: isActive ? '#fef3c7' : '#f8fafc',
+                            color: isActive ? '#b45309' : '#475569',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0
+                          }}
+                        >
+                          Ank {ank}
+                        </button>
+                      );
+                    })}
+                  </div>
 
-              {/* Double Panas Grid (3 columns) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                {DOUBLE_PANAS.filter(p => getPanaAnk(p) === activeDoublePanaAnk).map(pana => {
-                  const cartAmt = getNumberCartAmount(pana);
-                  return (
+                  {/* Quick Action: Add all 12 Panas */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                      Tap any Pana of Ank {activeSinglePanaAnk} to add:
+                    </span>
                     <button
-                      key={pana}
                       type="button"
-                      onClick={() => handleToggleDoublePana(pana)}
+                      onClick={handleAddAllSinglePanasOfAnk}
                       style={{
-                        position: 'relative',
-                        height: '44px',
-                        borderRadius: '10px',
-                        border: 'none',
-                        background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
-                        color: '#421d00',
-                        fontSize: '15px',
-                        fontWeight: 900,
-                        cursor: 'pointer',
-                        boxShadow: '0 3px 8px rgba(245, 158, 11, 0.28)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'transform 0.1s ease'
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #d97706',
+                        background: '#fffbeb',
+                        color: '#b45309',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
                       }}
-                      onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
-                      onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
                     >
-                      {pana}
-                      {cartAmt && (
-                        <span style={{
-                          position: 'absolute',
-                          top: '-4px',
-                          right: '-4px',
-                          background: '#0f172a',
-                          color: '#f59e0b',
-                          fontSize: '8px',
-                          fontWeight: 800,
-                          padding: '1px 3px',
-                          borderRadius: '5px',
-                          border: '1px solid #f59e0b'
-                        }}>
-                          ₹{cartAmt}
-                        </span>
-                      )}
+                      + Add All 12 Panas
                     </button>
-                  );
-                })}
-              </div>
+                  </div>
 
-              {/* Manual Direct 3-digit Typing Box */}
-              <div style={{
-                display: 'flex',
-                gap: '8px',
-                marginTop: '4px',
-                paddingTop: '8px',
-                borderTop: '1px dashed #e2e8f0'
-              }}>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={3}
-                  placeholder="Or enter Double Pana (e.g. 119)"
-                  value={manualDoublePana}
-                  onChange={(e) => setManualDoublePana(e.target.value.replace(/\D/g, '').slice(0, 3))}
-                  style={{
-                    flex: 1,
-                    height: '40px',
-                    padding: '0 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    background: '#f8fafc',
-                    color: '#0f172a',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    outline: 'none'
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
+                  {/* 12 Single Panas Grid (4 columns) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                    {SINGLE_PANAS.filter(p => getPanaAnk(p) === activeSinglePanaAnk).map(pana => {
+                      const cartAmt = getNumberCartAmount(pana);
+                      return (
+                        <button
+                          key={pana}
+                          type="button"
+                          onClick={() => handleToggleSinglePana(pana)}
+                          style={{
+                            position: 'relative',
+                            height: '44px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
+                            color: '#421d00',
+                            fontSize: '15px',
+                            fontWeight: 900,
+                            cursor: 'pointer',
+                            boxShadow: '0 3px 8px rgba(245, 158, 11, 0.28)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'transform 0.1s ease'
+                          }}
+                          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
+                          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                        >
+                          {pana}
+                          {cartAmt && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              background: '#0f172a',
+                              color: '#f59e0b',
+                              fontSize: '8px',
+                              fontWeight: 800,
+                              padding: '1px 3px',
+                              borderRadius: '5px',
+                              border: '1px solid #f59e0b'
+                            }}>
+                              ₹{cartAmt}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 3. SINGLE PANA BULK BOARD (Click to add Panas + Ank Filter) */}
+              {selectedType === 'Single Pana Bulk' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Ank Filter Tabs (1-9, 0) */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '6px',
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                    paddingBottom: '2px'
+                  }}>
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map(ank => {
+                      const isActive = activeSinglePanaAnk === ank;
+                      return (
+                        <button
+                          key={ank}
+                          type="button"
+                          onClick={() => setActiveSinglePanaAnk(ank)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            border: isActive ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                            background: isActive ? '#fef3c7' : '#f8fafc',
+                            color: isActive ? '#b45309' : '#475569',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0
+                          }}
+                        >
+                          Ank {ank}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Quick Action: Add all 12 Panas */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                      Tap any Pana of Ank {activeSinglePanaAnk} to add:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddAllSinglePanasOfAnk}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #d97706',
+                        background: '#fffbeb',
+                        color: '#b45309',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      + Add All 12 Panas
+                    </button>
+                  </div>
+
+                  {/* 12 Single Panas Grid (4 columns) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                    {SINGLE_PANAS.filter(p => getPanaAnk(p) === activeSinglePanaAnk).map(pana => {
+                      const cartAmt = getNumberCartAmount(pana);
+                      return (
+                        <button
+                          key={pana}
+                          type="button"
+                          onClick={() => handleToggleSinglePana(pana)}
+                          style={{
+                            position: 'relative',
+                            height: '44px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
+                            color: '#421d00',
+                            fontSize: '15px',
+                            fontWeight: 900,
+                            cursor: 'pointer',
+                            boxShadow: '0 3px 8px rgba(245, 158, 11, 0.28)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'transform 0.1s ease'
+                          }}
+                          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
+                          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                        >
+                          {pana}
+                          {cartAmt && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              background: '#0f172a',
+                              color: '#f59e0b',
+                              fontSize: '8px',
+                              fontWeight: 800,
+                              padding: '1px 3px',
+                              borderRadius: '5px',
+                              border: '1px solid #f59e0b'
+                            }}>
+                              ₹{cartAmt}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Manual Direct 3-digit Typing Box */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '8px',
+                    marginTop: '4px',
+                    paddingTop: '8px',
+                    borderTop: '1px dashed #e2e8f0'
+                  }}>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={3}
+                      placeholder="Or enter 3-digit Pana (e.g. 128)"
+                      value={manualSinglePana}
+                      onChange={(e) => setManualSinglePana(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                      style={{
+                        flex: 1,
+                        height: '40px',
+                        padding: '0 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        background: '#f8fafc',
+                        color: '#0f172a',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        outline: 'none'
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const norm = normalizePana(manualSinglePana);
+                        if (isValidSinglePana(norm)) {
+                          handleToggleSinglePana(norm);
+                          setManualSinglePana('');
+                        } else {
+                          showMaterialDialog('warning', 'Invalid Pana', `${manualSinglePana} is not a valid Single Pana.`);
+                        }
+                      }}
+                      style={{
+                        padding: '0 16px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: '#0f172a',
+                        color: '#fff',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 4. DOUBLE PANA (Standard Mode with Direct Input + Ank Grid) */}
+              {selectedType === 'Double Pana' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Direct Double Pana Input Bar */}
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
                     const norm = normalizePana(manualDoublePana);
                     if (isValidDoublePana(norm)) {
                       handleToggleDoublePana(norm);
                       setManualDoublePana('');
                     } else {
-                      showMaterialDialog('warning', 'Invalid Double Pana', `${manualDoublePana} is not a valid Double Pana.`);
+                      showMaterialDialog('warning', 'Invalid Double Pana', `${manualDoublePana || 'Empty'} is not a valid Double Pana.`);
                     }
-                  }}
-                  style={{
-                    padding: '0 16px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: '#0f172a',
-                    color: '#fff',
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    cursor: 'pointer'
-                  }}
-                >
-                  + Add
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* 5. TRIPLE PANA BOARD */}
-          {selectedType === 'Triple Pana' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
-                Tap any Triple Pana to add bet:
-              </span>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
-                {TRIPLE_PANAS.map(pana => {
-                  const cartAmt = getNumberCartAmount(pana);
-                  return (
+                  }} style={{
+                    display: 'flex',
+                    gap: '8px',
+                    alignItems: 'flex-end',
+                    background: '#f8fafc',
+                    padding: '10px 12px',
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>
+                        Enter Double Pana (3 digits, e.g. 118):
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={3}
+                        value={manualDoublePana}
+                        onChange={(e) => setManualDoublePana(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                        placeholder="Type Double Pana (e.g. 118)"
+                        style={{
+                          width: '100%',
+                          height: '42px',
+                          padding: '0 12px',
+                          borderRadius: '10px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: '#0f172a',
+                          fontSize: '16px',
+                          fontWeight: 800,
+                          outline: 'none'
+                        }}
+                      />
+                    </div>
                     <button
-                      key={pana}
-                      type="button"
-                      onClick={() => handleToggleTriplePana(pana)}
+                      type="submit"
                       style={{
-                        position: 'relative',
-                        height: '48px',
-                        borderRadius: '12px',
+                        height: '42px',
+                        padding: '0 18px',
+                        borderRadius: '10px',
                         border: 'none',
-                        background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
-                        color: '#421d00',
-                        fontSize: '15px',
-                        fontWeight: 900,
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        color: '#ffffff',
+                        fontWeight: 800,
+                        fontSize: '13px',
                         cursor: 'pointer',
-                        boxShadow: '0 4px 10px rgba(245, 158, 11, 0.35)',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'transform 0.1s ease'
+                        gap: '6px',
+                        boxShadow: '0 4px 10px rgba(245, 158, 11, 0.3)',
+                        flexShrink: 0
                       }}
-                      onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
-                      onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
                     >
-                      {pana}
-                      {cartAmt && (
-                        <span style={{
-                          position: 'absolute',
-                          top: '-4px',
-                          right: '-4px',
-                          background: '#0f172a',
-                          color: '#f59e0b',
-                          fontSize: '8px',
-                          fontWeight: 800,
-                          padding: '1px 3px',
-                          borderRadius: '5px',
-                          border: '1px solid #f59e0b'
-                        }}>
-                          ₹{cartAmt}
-                        </span>
-                      )}
+                      <Plus size={16} strokeWidth={2.6} /> Add Bid
                     </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                  </form>
 
-          {/* 6. HALF SANGAM & FULL SANGAM FORM */}
-          {isSangam && (
-            <form onSubmit={handleAddSangamBet} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {selectedType === 'Half Sangam' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px' }}>
+                  {/* Ank Filter Tabs (1-9, 0) */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '6px',
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                    paddingBottom: '2px'
+                  }}>
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map(ank => {
+                      const isActive = activeDoublePanaAnk === ank;
+                      return (
+                        <button
+                          key={ank}
+                          type="button"
+                          onClick={() => setActiveDoublePanaAnk(ank)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            border: isActive ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                            background: isActive ? '#fef3c7' : '#f8fafc',
+                            color: isActive ? '#b45309' : '#475569',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0
+                          }}
+                        >
+                          Ank {ank}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Quick Action: Add all Double Panas of Ank */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                      Tap any Double Pana of Ank {activeDoublePanaAnk} to add:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddAllDoublePanasOfAnk}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #d97706',
+                        background: '#fffbeb',
+                        color: '#b45309',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      + Add All Panas
+                    </button>
+                  </div>
+
+                  {/* Double Panas Grid (3 columns) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                    {DOUBLE_PANAS.filter(p => getPanaAnk(p) === activeDoublePanaAnk).map(pana => {
+                      const cartAmt = getNumberCartAmount(pana);
+                      return (
+                        <button
+                          key={pana}
+                          type="button"
+                          onClick={() => handleToggleDoublePana(pana)}
+                          style={{
+                            position: 'relative',
+                            height: '44px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
+                            color: '#421d00',
+                            fontSize: '15px',
+                            fontWeight: 900,
+                            cursor: 'pointer',
+                            boxShadow: '0 3px 8px rgba(245, 158, 11, 0.28)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'transform 0.1s ease'
+                          }}
+                          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
+                          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                        >
+                          {pana}
+                          {cartAmt && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              background: '#0f172a',
+                              color: '#f59e0b',
+                              fontSize: '8px',
+                              fontWeight: 800,
+                              padding: '1px 3px',
+                              borderRadius: '5px',
+                              border: '1px solid #f59e0b'
+                            }}>
+                              ₹{cartAmt}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 4. DOUBLE PANA BULK BOARD (Click to add Panas + Ank Filter) */}
+              {selectedType === 'Double Pana Bulk' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Ank Filter Tabs (1-9, 0) */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '6px',
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                    paddingBottom: '2px'
+                  }}>
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map(ank => {
+                      const isActive = activeDoublePanaAnk === ank;
+                      return (
+                        <button
+                          key={ank}
+                          type="button"
+                          onClick={() => setActiveDoublePanaAnk(ank)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            border: isActive ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                            background: isActive ? '#fef3c7' : '#f8fafc',
+                            color: isActive ? '#b45309' : '#475569',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0
+                          }}
+                        >
+                          Ank {ank}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Quick Action: Add all Double Panas of Ank */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                      Tap any Double Pana of Ank {activeDoublePanaAnk} to add:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddAllDoublePanasOfAnk}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #d97706',
+                        background: '#fffbeb',
+                        color: '#b45309',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      + Add All Panas
+                    </button>
+                  </div>
+
+                  {/* Double Panas Grid (3 columns) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                    {DOUBLE_PANAS.filter(p => getPanaAnk(p) === activeDoublePanaAnk).map(pana => {
+                      const cartAmt = getNumberCartAmount(pana);
+                      return (
+                        <button
+                          key={pana}
+                          type="button"
+                          onClick={() => handleToggleDoublePana(pana)}
+                          style={{
+                            position: 'relative',
+                            height: '44px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
+                            color: '#421d00',
+                            fontSize: '15px',
+                            fontWeight: 900,
+                            cursor: 'pointer',
+                            boxShadow: '0 3px 8px rgba(245, 158, 11, 0.28)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'transform 0.1s ease'
+                          }}
+                          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
+                          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                        >
+                          {pana}
+                          {cartAmt && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              background: '#0f172a',
+                              color: '#f59e0b',
+                              fontSize: '8px',
+                              fontWeight: 800,
+                              padding: '1px 3px',
+                              borderRadius: '5px',
+                              border: '1px solid #f59e0b'
+                            }}>
+                              ₹{cartAmt}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Manual Direct 3-digit Typing Box */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '8px',
+                    marginTop: '4px',
+                    paddingTop: '8px',
+                    borderTop: '1px dashed #e2e8f0'
+                  }}>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={3}
+                      placeholder="Or enter Double Pana (e.g. 119)"
+                      value={manualDoublePana}
+                      onChange={(e) => setManualDoublePana(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                      style={{
+                        flex: 1,
+                        height: '40px',
+                        padding: '0 12px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        background: '#f8fafc',
+                        color: '#0f172a',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        outline: 'none'
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const norm = normalizePana(manualDoublePana);
+                        if (isValidDoublePana(norm)) {
+                          handleToggleDoublePana(norm);
+                          setManualDoublePana('');
+                        } else {
+                          showMaterialDialog('warning', 'Invalid Double Pana', `${manualDoublePana} is not a valid Double Pana.`);
+                        }
+                      }}
+                      style={{
+                        padding: '0 16px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: '#0f172a',
+                        color: '#fff',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 5. TRIPLE PANA BOARD */}
+              {selectedType === 'Triple Pana' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                    Tap any Triple Pana to add bet:
+                  </span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
+                    {TRIPLE_PANAS.map(pana => {
+                      const cartAmt = getNumberCartAmount(pana);
+                      return (
+                        <button
+                          key={pana}
+                          type="button"
+                          onClick={() => handleToggleTriplePana(pana)}
+                          style={{
+                            position: 'relative',
+                            height: '48px',
+                            borderRadius: '12px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
+                            color: '#421d00',
+                            fontSize: '15px',
+                            fontWeight: 900,
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 10px rgba(245, 158, 11, 0.35)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'transform 0.1s ease'
+                          }}
+                          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
+                          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                        >
+                          {pana}
+                          {cartAmt && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              background: '#0f172a',
+                              color: '#f59e0b',
+                              fontSize: '8px',
+                              fontWeight: 800,
+                              padding: '1px 3px',
+                              borderRadius: '5px',
+                              border: '1px solid #f59e0b'
+                            }}>
+                              ₹{cartAmt}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ODD EVEN BOARD */}
+              {selectedType === 'Odd Even' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{
+                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.04))',
+                    borderRadius: '12px',
+                    padding: '12px 14px',
+                    border: '1px solid rgba(245, 158, 11, 0.25)'
+                  }}>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#b45309', display: 'block', marginBottom: '2px' }}>
+                      ⚡ Quick Odd / Even Betting
+                    </span>
+                    <span style={{ fontSize: '11.5px', color: '#64748b' }}>
+                      Place single digit bets on all 5 Odd or Even digits at once with ₹{amount || '10'} each.
+                    </span>
+                  </div>
+
+                  {/* Toggle Buttons: Odd vs Even */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setOddEvenChoice('odd')}
+                      style={{
+                        padding: '16px 12px',
+                        borderRadius: '14px',
+                        border: oddEvenChoice === 'odd' ? '2px solid #d97706' : '1.5px solid #cbd5e1',
+                        background: oddEvenChoice === 'odd' ? 'linear-gradient(135deg, #fef3c7, #fde68a)' : '#f8fafc',
+                        color: oddEvenChoice === 'odd' ? '#b45309' : '#475569',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '4px',
+                        boxShadow: oddEvenChoice === 'odd' ? '0 4px 12px rgba(217, 119, 6, 0.25)' : 'none'
+                      }}
+                    >
+                      <span style={{ fontSize: '17px', fontWeight: 900 }}>ODD</span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '2px' }}>1, 3, 5, 7, 9</span>
+                      <span style={{ fontSize: '10px', color: '#64748b' }}>5 Digits</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setOddEvenChoice('even')}
+                      style={{
+                        padding: '16px 12px',
+                        borderRadius: '14px',
+                        border: oddEvenChoice === 'even' ? '2px solid #d97706' : '1.5px solid #cbd5e1',
+                        background: oddEvenChoice === 'even' ? 'linear-gradient(135deg, #fef3c7, #fde68a)' : '#f8fafc',
+                        color: oddEvenChoice === 'even' ? '#b45309' : '#475569',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '4px',
+                        boxShadow: oddEvenChoice === 'even' ? '0 4px 12px rgba(217, 119, 6, 0.25)' : 'none'
+                      }}
+                    >
+                      <span style={{ fontSize: '17px', fontWeight: 900 }}>EVEN</span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '2px' }}>0, 2, 4, 6, 8</span>
+                      <span style={{ fontSize: '10px', color: '#64748b' }}>5 Digits</span>
+                    </button>
+                  </div>
+
+                  {/* Total Summary & Add Button */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '10px 14px',
+                    background: '#f1f5f9',
+                    borderRadius: '10px',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    color: '#334155'
+                  }}>
+                    <span>Total: 5 Digits × ₹{parseInt(amount, 10) || 0}</span>
+                    <span style={{ color: '#d97706', fontSize: '14px', fontWeight: 900 }}>
+                      ₹{(parseInt(amount, 10) || 0) * 5}
+                    </span>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => {
-                      setHalfType('OD_CP');
-                      setOpenDigit('');
-                      setClosePana('');
-                    }}
+                    onClick={() => handleBatchSingleDigit(oddEvenChoice)}
                     style={{
-                      padding: '8px',
-                      borderRadius: '8px',
-                      border: halfType === 'OD_CP' ? '1.5px solid #d97706' : '1px solid #cbd5e1',
-                      background: halfType === 'OD_CP' ? '#fef3c7' : '#f8fafc',
-                      color: halfType === 'OD_CP' ? '#b45309' : '#475569',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      cursor: 'pointer'
+                      height: '46px',
+                      borderRadius: '12px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                      color: '#ffffff',
+                      fontWeight: 900,
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      boxShadow: '0 4px 14px rgba(245, 158, 11, 0.35)'
                     }}
                   >
-                    Open Digit + Close Pana
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setHalfType('OP_CD');
-                      setCloseDigit('');
-                      setOpenPana('');
-                    }}
-                    style={{
-                      padding: '8px',
-                      borderRadius: '8px',
-                      border: halfType === 'OP_CD' ? '1.5px solid #d97706' : '1px solid #cbd5e1',
-                      background: halfType === 'OP_CD' ? '#fef3c7' : '#f8fafc',
-                      color: halfType === 'OP_CD' ? '#b45309' : '#475569',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Open Pana + Close Digit
+                    <Plus size={18} strokeWidth={2.6} /> Add {oddEvenChoice.toUpperCase()} (5 Digits) to Bet List
                   </button>
                 </div>
               )}
 
-              {/* Sangam Inputs (Search with Dropdown for Open/Close Pana & Digit) */}
-              {selectedType === 'Half Sangam' ? (
-                halfType === 'OD_CP' ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
-                    <SearchableSelect
-                      theme="light"
-                      label="1. Open Digit (0-9)"
-                      placeholder="Select Open Digit"
-                      options={SINGLE_DIGITS}
-                      value={openDigit}
-                      onChange={(val) => {
-                        setOpenDigit(val);
-                        if (closePana && val !== '' && !isPanaInFamily(closePana, val, false)) {
+              {/* RED BRACKET BOARD */}
+              {selectedType === 'Red Bracket' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Filter Tabs: All, Doubles, Cut */}
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setRedBracketTab('all')}
+                      style={{
+                        flex: 1,
+                        padding: '8px',
+                        borderRadius: '8px',
+                        border: redBracketTab === 'all' ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                        background: redBracketTab === 'all' ? '#fef3c7' : '#f8fafc',
+                        color: redBracketTab === 'all' ? '#b45309' : '#475569',
+                        fontSize: '11.5px',
+                        fontWeight: 800,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      All (20 Jodis)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRedBracketTab('doubles')}
+                      style={{
+                        flex: 1,
+                        padding: '8px',
+                        borderRadius: '8px',
+                        border: redBracketTab === 'doubles' ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                        background: redBracketTab === 'doubles' ? '#fef3c7' : '#f8fafc',
+                        color: redBracketTab === 'doubles' ? '#b45309' : '#475569',
+                        fontSize: '11.5px',
+                        fontWeight: 800,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Doubles (10)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRedBracketTab('cut')}
+                      style={{
+                        flex: 1,
+                        padding: '8px',
+                        borderRadius: '8px',
+                        border: redBracketTab === 'cut' ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                        background: redBracketTab === 'cut' ? '#fef3c7' : '#f8fafc',
+                        color: redBracketTab === 'cut' ? '#b45309' : '#475569',
+                        fontSize: '11.5px',
+                        fontWeight: 800,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Half-Red / Cut (10)
+                    </button>
+                  </div>
+
+                  {/* Batch Add Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const list = redBracketTab === 'doubles'
+                        ? RED_BRACKETS_DOUBLES
+                        : redBracketTab === 'cut'
+                          ? RED_BRACKETS_CUT
+                          : RED_BRACKETS_ALL;
+                      list.forEach(j => handleToggleJodi(j));
+                    }}
+                    style={{
+                      height: '40px',
+                      borderRadius: '10px',
+                      border: '1px solid #d97706',
+                      background: '#fffbeb',
+                      color: '#b45309',
+                      fontWeight: 800,
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    + Add All {redBracketTab === 'all' ? '20' : '10'} {redBracketTab === 'doubles' ? 'Double' : redBracketTab === 'cut' ? 'Cut' : 'Red Bracket'} Jodis (₹{(parseInt(amount, 10) || 0) * (redBracketTab === 'all' ? 20 : 10)})
+                  </button>
+
+                  {/* 20 Jodi Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                    {(redBracketTab === 'doubles'
+                      ? RED_BRACKETS_DOUBLES
+                      : redBracketTab === 'cut'
+                        ? RED_BRACKETS_CUT
+                        : RED_BRACKETS_ALL
+                    ).map(jodi => {
+                      const cartAmt = getNumberCartAmount(jodi);
+                      return (
+                        <button
+                          key={jodi}
+                          type="button"
+                          onClick={() => handleToggleJodi(jodi)}
+                          style={{
+                            position: 'relative',
+                            height: '46px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #fba756 0%, #f58f33 100%)',
+                            color: '#421d00',
+                            fontSize: '16px',
+                            fontWeight: 900,
+                            cursor: 'pointer',
+                            boxShadow: '0 3px 8px rgba(245, 158, 11, 0.28)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'transform 0.1s ease'
+                          }}
+                        >
+                          {jodi}
+                          {cartAmt && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              background: '#0f172a',
+                              color: '#f59e0b',
+                              fontSize: '8.5px',
+                              fontWeight: 800,
+                              padding: '1px 3px',
+                              borderRadius: '5px',
+                              border: '1px solid #f59e0b'
+                            }}>
+                              ₹{cartAmt}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* GROUP JODI (FAMILY JODI) BOARD */}
+              {selectedType === 'Group Jodi' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{
+                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.04))',
+                    borderRadius: '12px',
+                    padding: '12px 14px',
+                    border: '1px solid rgba(245, 158, 11, 0.25)'
+                  }}>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#b45309', display: 'block', marginBottom: '2px' }}>
+                      👥 Group Jodi / Family Jodi
+                    </span>
+                    <span style={{ fontSize: '11.5px', color: '#64748b' }}>
+                      Enter any 2-digit Jodi to automatically calculate and place bets on all its family cut jodis.
+                    </span>
+                  </div>
+
+                  {/* Input for Base Jodi */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>
+                      Enter Base Jodi (00-99):
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={2}
+                      value={groupJodiInput}
+                      onChange={(e) => setGroupJodiInput(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                      placeholder="e.g. 12"
+                      style={{
+                        width: '100%',
+                        height: '46px',
+                        padding: '0 14px',
+                        borderRadius: '12px',
+                        border: '1.5px solid #cbd5e1',
+                        background: '#f8fafc',
+                        color: '#0f172a',
+                        fontSize: '17px',
+                        fontWeight: 900,
+                        outline: 'none',
+                        letterSpacing: '2px'
+                      }}
+                    />
+                  </div>
+
+                  {/* Generated Jodis Preview */}
+                  {groupJodiInput.length === 2 && (() => {
+                    const family = getFamilyJodis(groupJodiInput);
+                    const pts = parseInt(amount, 10) || 0;
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '12px', color: '#475569', fontWeight: 700 }}>
+                            Family Jodis ({family.length}):
+                          </span>
+                          <span style={{ fontSize: '12px', color: '#d97706', fontWeight: 800 }}>
+                            Total: ₹{family.length * pts}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                          {family.map(j => (
+                            <div key={j} style={{
+                              padding: '8px 14px',
+                              borderRadius: '8px',
+                              background: '#fef3c7',
+                              border: '1px solid #d97706',
+                              color: '#b45309',
+                              fontSize: '15px',
+                              fontWeight: 900
+                            }}>
+                              {j}
+                            </div>
+                          ))}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleAddGroupJodi}
+                          style={{
+                            height: '46px',
+                            borderRadius: '12px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                            color: '#ffffff',
+                            fontWeight: 900,
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            boxShadow: '0 4px 14px rgba(245, 158, 11, 0.35)',
+                            marginTop: '4px'
+                          }}
+                        >
+                          <Plus size={18} strokeWidth={2.6} /> Add All {family.length} Family Jodis (₹{family.length * pts})
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* SP DP TP (CHOICE PANA) BOARD */}
+              {selectedType === 'SP DP TP' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {/* Ank Selection Bar */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#64748b', fontWeight: 700, marginBottom: '6px' }}>
+                      Select Ank (0-9):
+                    </label>
+                    <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: '2px' }}>
+                      {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map(ank => {
+                        const isActive = spDpTpAnk === ank;
+                        return (
+                          <button
+                            key={ank}
+                            type="button"
+                            onClick={() => setSpDpTpAnk(ank)}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '8px',
+                              border: isActive ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                              background: isActive ? '#fef3c7' : '#f8fafc',
+                              color: isActive ? '#b45309' : '#475569',
+                              fontSize: '13px',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              flexShrink: 0
+                            }}
+                          >
+                            Ank {ank}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Pana Types Checkboxes */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setSpDpTpSelections(s => ({ ...s, sp: !s.sp }))}
+                      style={{
+                        padding: '10px 8px',
+                        borderRadius: '10px',
+                        border: spDpTpSelections.sp ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                        background: spDpTpSelections.sp ? '#fef3c7' : '#f8fafc',
+                        color: spDpTpSelections.sp ? '#b45309' : '#475569',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '2px'
+                      }}
+                    >
+                      <span>Single Pana</span>
+                      <span style={{ fontSize: '10px', color: '#64748b' }}>(12 Panas)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSpDpTpSelections(s => ({ ...s, dp: !s.dp }))}
+                      style={{
+                        padding: '10px 8px',
+                        borderRadius: '10px',
+                        border: spDpTpSelections.dp ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                        background: spDpTpSelections.dp ? '#fef3c7' : '#f8fafc',
+                        color: spDpTpSelections.dp ? '#b45309' : '#475569',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '2px'
+                      }}
+                    >
+                      <span>Double Pana</span>
+                      <span style={{ fontSize: '10px', color: '#64748b' }}>(9 Panas)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSpDpTpSelections(s => ({ ...s, tp: !s.tp }))}
+                      style={{
+                        padding: '10px 8px',
+                        borderRadius: '10px',
+                        border: spDpTpSelections.tp ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                        background: spDpTpSelections.tp ? '#fef3c7' : '#f8fafc',
+                        color: spDpTpSelections.tp ? '#b45309' : '#475569',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '2px'
+                      }}
+                    >
+                      <span>Triple Pana</span>
+                      <span style={{ fontSize: '10px', color: '#64748b' }}>(1 Pana)</span>
+                    </button>
+                  </div>
+
+                  {/* Total Summary & Add Button */}
+                  {(() => {
+                    const totalPanas = (spDpTpSelections.sp ? 12 : 0) + (spDpTpSelections.dp ? 9 : 0) + (spDpTpSelections.tp ? 1 : 0);
+                    const pts = parseInt(amount, 10) || 0;
+                    return (
+                      <>
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '8px 12px',
+                          background: '#f1f5f9',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          color: '#334155'
+                        }}>
+                          <span>Total: {totalPanas} Panas of Ank {spDpTpAnk}</span>
+                          <span style={{ color: '#d97706', fontWeight: 900 }}>₹{totalPanas * pts}</span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleAddSpDpTp}
+                          style={{
+                            height: '46px',
+                            borderRadius: '12px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                            color: '#ffffff',
+                            fontWeight: 900,
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            boxShadow: '0 4px 14px rgba(245, 158, 11, 0.35)'
+                          }}
+                        >
+                          <Plus size={18} strokeWidth={2.6} /> Add All {totalPanas} Panas to Bet List
+                        </button>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* 6. HALF SANGAM & FULL SANGAM FORM */}
+              {isSangam && (
+                <form onSubmit={handleAddSangamBet} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {selectedType === 'Half Sangam' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHalfType('OD_CP');
+                          setOpenDigit('');
                           setClosePana('');
-                        }
-                      }}
-                      maxLength={1}
-                    />
-
-                    <SearchableSelect
-                      theme="light"
-                      label={openDigit !== '' ? `2. Close Pana (Digit ${openDigit} Family)` : '2. Close Pana'}
-                      placeholder={openDigit !== '' ? `Pana of Digit ${openDigit}` : 'Select Open Digit first'}
-                      options={openDigit !== '' ? getFamilyPanas(openDigit, false) : []}
-                      value={closePana}
-                      onChange={(val) => setClosePana(val)}
-                      disabled={!openDigit}
-                      maxLength={3}
-                      isPana={true}
-                    />
-                  </div>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
-                    <SearchableSelect
-                      theme="light"
-                      label="1. Close Digit (0-9)"
-                      placeholder="Select Close Digit"
-                      options={SINGLE_DIGITS}
-                      value={closeDigit}
-                      onChange={(val) => {
-                        setCloseDigit(val);
-                        if (openPana && val !== '' && !isPanaInFamily(openPana, val, false)) {
+                        }}
+                        style={{
+                          padding: '8px',
+                          borderRadius: '8px',
+                          border: halfType === 'OD_CP' ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                          background: halfType === 'OD_CP' ? '#fef3c7' : '#f8fafc',
+                          color: halfType === 'OD_CP' ? '#b45309' : '#475569',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Open Digit + Close Pana
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHalfType('OP_CD');
+                          setCloseDigit('');
                           setOpenPana('');
-                        }
-                      }}
-                      maxLength={1}
-                    />
+                        }}
+                        style={{
+                          padding: '8px',
+                          borderRadius: '8px',
+                          border: halfType === 'OP_CD' ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                          background: halfType === 'OP_CD' ? '#fef3c7' : '#f8fafc',
+                          color: halfType === 'OP_CD' ? '#b45309' : '#475569',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Open Pana + Close Digit
+                      </button>
+                    </div>
+                  )}
 
-                    <SearchableSelect
-                      theme="light"
-                      label={closeDigit !== '' ? `2. Open Pana (Digit ${closeDigit} Family)` : '2. Open Pana'}
-                      placeholder={closeDigit !== '' ? `Pana of Digit ${closeDigit}` : 'Select Close Digit first'}
-                      options={closeDigit !== '' ? getFamilyPanas(closeDigit, false) : []}
-                      value={openPana}
-                      onChange={(val) => setOpenPana(val)}
-                      disabled={!closeDigit}
-                      maxLength={3}
-                      isPana={true}
-                    />
-                  </div>
-                )
-              ) : (
-                /* Full Sangam */
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
-                  <SearchableSelect
-                    theme="light"
-                    label="1. Open Pana (3 Digits)"
-                    placeholder="Select Open Pana"
-                    options={ALL_PANAS}
-                    value={fullOpenPana}
-                    onChange={(val) => setFullOpenPana(val)}
-                    maxLength={3}
-                    isPana={true}
-                  />
+                  {/* Sangam Inputs (Search with Dropdown for Open/Close Pana & Digit) */}
+                  {selectedType === 'Half Sangam' ? (
+                    halfType === 'OD_CP' ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+                        <SearchableSelect
+                          theme="light"
+                          label="1. Open Digit (0-9)"
+                          placeholder="Select Open Digit"
+                          options={SINGLE_DIGITS}
+                          value={openDigit}
+                          onChange={(val) => {
+                            setOpenDigit(val);
+                            if (closePana && val !== '' && !isPanaInFamily(closePana, val, false)) {
+                              setClosePana('');
+                            }
+                          }}
+                          maxLength={1}
+                        />
 
-                  <SearchableSelect
-                    theme="light"
-                    label="2. Close Pana (3 Digits)"
-                    placeholder="Select Close Pana"
-                    options={ALL_PANAS}
-                    value={fullClosePana}
-                    onChange={(val) => setFullClosePana(val)}
-                    maxLength={3}
-                    isPana={true}
-                  />
-                </div>
+                        <SearchableSelect
+                          theme="light"
+                          label={openDigit !== '' ? `2. Close Pana (Digit ${openDigit} Family)` : '2. Close Pana'}
+                          placeholder={openDigit !== '' ? `Pana of Digit ${openDigit}` : 'Select Open Digit first'}
+                          options={openDigit !== '' ? getFamilyPanas(openDigit, false) : []}
+                          value={closePana}
+                          onChange={(val) => setClosePana(val)}
+                          disabled={!openDigit}
+                          maxLength={3}
+                          isPana={true}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+                        <SearchableSelect
+                          theme="light"
+                          label="1. Close Digit (0-9)"
+                          placeholder="Select Close Digit"
+                          options={SINGLE_DIGITS}
+                          value={closeDigit}
+                          onChange={(val) => {
+                            setCloseDigit(val);
+                            if (openPana && val !== '' && !isPanaInFamily(openPana, val, false)) {
+                              setOpenPana('');
+                            }
+                          }}
+                          maxLength={1}
+                        />
+
+                        <SearchableSelect
+                          theme="light"
+                          label={closeDigit !== '' ? `2. Open Pana (Digit ${closeDigit} Family)` : '2. Open Pana'}
+                          placeholder={closeDigit !== '' ? `Pana of Digit ${closeDigit}` : 'Select Close Digit first'}
+                          options={closeDigit !== '' ? getFamilyPanas(closeDigit, false) : []}
+                          value={openPana}
+                          onChange={(val) => setOpenPana(val)}
+                          disabled={!closeDigit}
+                          maxLength={3}
+                          isPana={true}
+                        />
+                      </div>
+                    )
+                  ) : (
+                    /* Full Sangam */
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+                      <SearchableSelect
+                        theme="light"
+                        label="1. Open Pana (3 Digits)"
+                        placeholder="Select Open Pana"
+                        options={ALL_PANAS}
+                        value={fullOpenPana}
+                        onChange={(val) => setFullOpenPana(val)}
+                        maxLength={3}
+                        isPana={true}
+                      />
+
+                      <SearchableSelect
+                        theme="light"
+                        label="2. Close Pana (3 Digits)"
+                        placeholder="Select Close Pana"
+                        options={ALL_PANAS}
+                        value={fullClosePana}
+                        onChange={(val) => setFullClosePana(val)}
+                        maxLength={3}
+                        isPana={true}
+                      />
+                    </div>
+                  )}
+
+                  {/* Sangam Add Button */}
+                  <button
+                    type="submit"
+                    style={{
+                      width: '100%',
+                      height: '46px',
+                      borderRadius: '12px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                      color: '#ffffff',
+                      fontWeight: 800,
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      boxShadow: '0 4px 14px rgba(245, 158, 11, 0.35)',
+                      textTransform: 'uppercase',
+                      marginTop: '4px'
+                    }}
+                  >
+                    <Plus size={18} /> Add Sangam Bet
+                  </button>
+                </form>
               )}
-
-              {/* Sangam Add Button */}
-              <button
-                type="submit"
-                style={{
-                  width: '100%',
-                  height: '46px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                  color: '#ffffff',
-                  fontWeight: 800,
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  boxShadow: '0 4px 14px rgba(245, 158, 11, 0.35)',
-                  textTransform: 'uppercase',
-                  marginTop: '4px'
-                }}
-              >
-                <Plus size={18} /> Add Sangam Bet
-              </button>
-            </form>
-          )}
             </>
           )}
         </div>

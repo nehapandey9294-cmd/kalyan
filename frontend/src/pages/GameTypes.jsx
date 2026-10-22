@@ -69,19 +69,23 @@ const MotorIcon = () => (
 );
 
 const GAME_TYPE_CARDS = [
-  { id: 'single_digits', title: 'Single Digits', targetType: 'Single Digit Bulk', rateKey: 'Single Digit', icon: SingleDieIcon },
+  { id: 'single_digits', title: 'Single Digits', targetType: 'Single Digit', rateKey: 'Single Digit', icon: SingleDieIcon },
   { id: 'single_digits_bulk', title: 'Single Digits Bulk', targetType: 'Single Digit Bulk', rateKey: 'Single Digit', icon: SingleDieIcon },
-  { id: 'jodi', title: 'Jodi', targetType: 'Jodi Bulk', rateKey: 'Jodi Digit', icon: DoubleDiceIcon, openOnly: true },
+  { id: 'jodi', title: 'Jodi', targetType: 'Jodi', rateKey: 'Jodi Digit', icon: DoubleDiceIcon, openOnly: true },
   { id: 'jodi_bulk', title: 'Jodi Bulk', targetType: 'Jodi Bulk', rateKey: 'Jodi Digit', icon: DoubleDiceIcon, openOnly: true },
-  { id: 'single_pana', title: 'Single Pana', targetType: 'Single Pana Bulk', rateKey: 'Single Pana', icon: SingleCardIcon },
+  { id: 'single_pana', title: 'Single Pana', targetType: 'Single Pana', rateKey: 'Single Pana', icon: SingleCardIcon },
   { id: 'single_pana_bulk', title: 'Single Pana Bulk', targetType: 'Single Pana Bulk', rateKey: 'Single Pana', icon: SingleCardIcon },
-  { id: 'double_pana', title: 'Double Pana', targetType: 'Double Pana Bulk', rateKey: 'Double Pana', icon: DoubleCardIcon },
+  { id: 'double_pana', title: 'Double Pana', targetType: 'Double Pana', rateKey: 'Double Pana', icon: DoubleCardIcon },
   { id: 'double_pana_bulk', title: 'Double Pana Bulk', targetType: 'Double Pana Bulk', rateKey: 'Double Pana', icon: DoubleCardIcon },
   { id: 'triple_pana', title: 'Triple Pana', targetType: 'Triple Pana', rateKey: 'Triple Pana', icon: TripleCardIcon },
   { id: 'half_sangam', title: 'Half Sangam', targetType: 'Half Sangam', rateKey: 'Half Sangam', icon: HalfSangamIcon, openOnly: true },
   { id: 'full_sangam', title: 'Full Sangam', targetType: 'Full Sangam', rateKey: 'Full Sangam', icon: FullSangamIcon, openOnly: true },
   { id: 'sp_motor', title: 'SP Motor', targetType: 'SP Motor', rateKey: 'Single Pana', icon: MotorIcon },
-  { id: 'dp_motor', title: 'DP Motor', targetType: 'DP Motor', rateKey: 'Double Pana', icon: MotorIcon }
+  { id: 'dp_motor', title: 'DP Motor', targetType: 'DP Motor', rateKey: 'Double Pana', icon: MotorIcon },
+  { id: 'odd_even', title: 'Odd Even', targetType: 'Odd Even', rateKey: 'Single Digit', icon: SingleDieIcon },
+  { id: 'red_bracket', title: 'Red Bracket', targetType: 'Red Bracket', rateKey: 'Jodi Digit', icon: DoubleDiceIcon, openOnly: true },
+  { id: 'group_jodi', title: 'Group Jodi', targetType: 'Group Jodi', rateKey: 'Jodi Digit', icon: DoubleDiceIcon, openOnly: true },
+  { id: 'sp_dp_tp', title: 'SP DP TP', targetType: 'SP DP TP', rateKey: 'Single Pana', icon: SingleCardIcon }
 ];
 
 const GameTypes = () => {

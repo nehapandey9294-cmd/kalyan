@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Wallet, ArrowLeft, History, PlusCircle, ArrowUpRight, QrCode, PhoneCall, MessageCircle, CheckCircle2 } from 'lucide-react';
 import api from '../utils/api';
-import { getISTTodayStr, getISTDaysAgoStr, formatDisplayDateTime } from '../utils/indianTime';
+import { getISTTodayStr, getISTDaysAgoStr, formatDisplayDateTime, parseDateTimeToEpoch } from '../utils/indianTime';
 
 const WalletPage = () => {
   const [walletInfo, setWalletInfo] = useState(null);
@@ -35,7 +35,16 @@ const WalletPage = () => {
 
       const historyRes = await api.get(`/wallet/history?date1=${d1}&date2=${d2}`);
       if (historyRes.data.success === '1') {
-        setHistory(historyRes.data.data);
+        const rawList = historyRes.data.result || historyRes.data.data || [];
+        const sorted = [...rawList].sort((a, b) => {
+          const idA = Number(a.id);
+          const idB = Number(b.id);
+          if (!isNaN(idA) && !isNaN(idB) && idA > 0 && idB > 0 && idA !== idB) {
+            return idB - idA;
+          }
+          return parseDateTimeToEpoch(b.date, b.time) - parseDateTimeToEpoch(a.date, a.time);
+        });
+        setHistory(sorted);
       }
     } catch (err) {
       console.error(err);
@@ -214,19 +223,27 @@ const WalletPage = () => {
                 {history.length === 0 ? (
                   <p style={{ color: 'rgba(255, 255, 255, 0.6)', textAlign: 'center', padding: '24px' }}>No transactions recorded</p>
                 ) : (
-                  history.map(item => (
-                    <div key={item.id} className="flex-between" style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.3)', borderRadius: '12px', borderLeft: `4px solid ${item.amount.startsWith('-') ? '#f87171' : '#34d399'}` }}>
-                      <div>
-                        <p style={{ color: '#fff', fontWeight: '600', fontSize: '0.92rem', margin: '0 0 2px 0' }}>{item.remark}</p>
-                        <span style={{ color: 'rgba(255, 255, 255, 0.65)', fontSize: '0.75rem' }}>
-                          {formatDisplayDateTime(item.date, item.time)}
-                        </span>
+                  history.map((item, idx) => {
+                    const isDebit = String(item.amount || '').trim().startsWith('-') ||
+                      String(item.status || '') === '0' ||
+                      /deduct|debit|revert|withdraw|bid/i.test(item.remark || '');
+                    const rawAmt = String(item.amount || '0').replace(/^[+-]/, '').trim();
+                    const badgeColor = isDebit ? '#f87171' : '#34d399';
+
+                    return (
+                      <div key={item.id || idx} className="flex-between" style={{ padding: '12px 14px', background: 'rgba(0,0,0,0.3)', borderRadius: '12px', borderLeft: `4px solid ${badgeColor}` }}>
+                        <div>
+                          <p style={{ color: '#fff', fontWeight: '600', fontSize: '0.92rem', margin: '0 0 2px 0' }}>{item.remark}</p>
+                          <span style={{ color: 'rgba(255, 255, 255, 0.65)', fontSize: '0.75rem' }}>
+                            {formatDisplayDateTime(item.date, item.time)}
+                          </span>
+                        </div>
+                        <strong style={{ color: badgeColor, fontSize: '1.05rem', fontWeight: '800' }}>
+                          {isDebit ? `- ₹ ${rawAmt}` : `+ ₹ ${rawAmt}`}
+                        </strong>
                       </div>
-                      <strong style={{ color: item.amount.startsWith('-') ? '#f87171' : '#34d399', fontSize: '1.05rem', fontWeight: '800' }}>
-                        {item.amount.startsWith('-') ? '' : '+'}{item.amount}
-                      </strong>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>

@@ -641,7 +641,7 @@ exports.rejectWithdrawal = async (req, res) => {
     const updatedWallet = user ? user.wallet : 0;
 
     const currentDateStr = getISTDateStr();
-    const currentTimeStr = getISTTimeStr();
+    const currentTimeStr = getISTTime12h();
     const walletRemark = `Withdrawal Rejected (${remark}) - Refunded`;
 
     await db.query(
@@ -788,15 +788,21 @@ async function processWinners(con, gameName, date, queryStr, params, winCategory
     }
 
     // Credit wallet
-    const [users] = await con.query('SELECT wallet FROM user_info WHERE phone = ?', [phone]);
+    const rawPhone = String(phone).trim();
+    const clean10 = rawPhone.replace(/\D/g, '').slice(-10);
+    const [users] = await con.query(
+      'SELECT id, phone, wallet FROM user_info WHERE phone = ? OR RIGHT(phone, 10) = ? OR REPLACE(phone, "+91", "") = ? LIMIT 1',
+      [rawPhone, clean10, clean10]
+    );
     if (users.length > 0) {
-      const currentWallet = parseFloat(users[0].wallet || '0');
+      const userRow = users[0];
+      const currentWallet = parseFloat(userRow.wallet || '0');
       const newWallet = currentWallet + winAmount;
 
-      await con.query('UPDATE user_info SET wallet = ? WHERE phone = ?', [newWallet, phone]);
+      await con.query('UPDATE user_info SET wallet = ? WHERE id = ?', [newWallet, userRow.id]);
       await con.query(
         'INSERT INTO wallet_history (status, date, time, amount, updated_amount, remark, phone_number) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        ['1', currentDateStr, currentTimeStr, winAmount, newWallet, winRemark, phone]
+        ['1', currentDateStr, currentTimeStr, winAmount, newWallet, winRemark, userRow.phone]
       );
     }
 
@@ -806,7 +812,72 @@ async function processWinners(con, gameName, date, queryStr, params, winCategory
   return totalCredited;
 }
 
-// Declare Game Result & Distribute Payouts
+// Helper: Revert winnings for a game, date, and session (deducts from user wallets, logs to wallet_history, and deletes from user_winning_report)
+async function revertWinnersForGame(gameName, date, session) {
+  const sess = session ? session.toLowerCase() : 'all';
+  let winQuery = `
+    SELECT * FROM user_winning_report 
+    WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+    AND (date = ? OR DATE(date) = ? OR date LIKE ?)
+  `;
+  const winParams = [gameName, date, date, `${date}%`];
+
+  if (sess === 'open') {
+    // If open result is deleted/updated, revert Open session bets AND Jodi/Sangam bets (as Jodi & Sangam depend on open digit)
+    winQuery += ` AND (
+      LOWER(session) = 'open' 
+      OR LOWER(game_type) LIKE '%jodi%' 
+      OR LOWER(game_type) LIKE '%sangam%'
+      OR game_type IN ('Open Pana', 'Single Pana', 'Double Pana', 'Triple Pana', 'Single Digit', 'SP Motor', 'DP Motor')
+    )`;
+  } else if (sess === 'close') {
+    // If close result is deleted/updated, revert Close session bets AND all Jodi & Sangam bets
+    winQuery += ` AND (
+      LOWER(session) = 'close' 
+      OR LOWER(game_type) LIKE '%jodi%' 
+      OR LOWER(game_type) LIKE '%sangam%'
+      OR game_type IN ('Close Pana', 'Single Pana', 'Double Pana', 'Triple Pana', 'Single Digit', 'Jodi Digit', 'Jodi', 'Half Sangam', 'Full Sangam', 'SP Motor', 'DP Motor')
+    )`;
+  }
+
+  const [winners] = await db.query(winQuery, winParams);
+  const currentDateStr = getISTDateStr();
+  const currentTimeStr = getISTTime12h();
+  let totalReverted = 0;
+
+  for (const w of winners) {
+    const phone = w.username || w.phone_number;
+    const winPoints = parseFloat(w.winning_points || '0');
+
+    if (winPoints > 0 && phone) {
+      const rawPhone = String(phone).trim();
+      const clean10 = rawPhone.replace(/\D/g, '').slice(-10);
+
+      const [users] = await db.query(
+        'SELECT id, phone, wallet FROM user_info WHERE phone = ? OR RIGHT(phone, 10) = ? OR REPLACE(phone, "+91", "") = ? LIMIT 1',
+        [rawPhone, clean10, clean10]
+      );
+
+      if (users.length > 0) {
+        const userRow = users[0];
+        const currentWallet = parseFloat(userRow.wallet || '0');
+        const newWallet = Math.max(0, currentWallet - winPoints);
+
+        await db.query('UPDATE user_info SET wallet = ? WHERE id = ?', [newWallet, userRow.id]);
+        await db.query(
+          'INSERT INTO wallet_history (status, date, time, amount, updated_amount, remark, phone_number) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          ['0', currentDateStr, currentTimeStr, winPoints, newWallet, `Revert Win - ${gameName} (${w.game_type || sess.toUpperCase()})`, userRow.phone]
+        );
+        totalReverted += winPoints;
+      }
+    }
+    await db.query('DELETE FROM user_winning_report WHERE id = ?', [w.id]);
+  }
+
+  return { revertedCount: winners.length, totalAmount: totalReverted };
+}
+
+// Declare Game Result & Distribute Payouts (supports updating existing results with automatic wallet deduction & re-credit)
 exports.declareResult = async (req, res) => {
   const { game_name, date, session, open_pana, open_result, close_pana, close_result } = req.body;
 
@@ -831,6 +902,9 @@ exports.declareResult = async (req, res) => {
       [date, date, `${date}%`, game_name]
     );
 
+    let isUpdate = false;
+    let revertedCount = 0;
+
     if (checkChart.length > 0) {
       const row = checkChart[0];
       if (sessionKey === 'close') {
@@ -838,30 +912,31 @@ exports.declareResult = async (req, res) => {
           return res.json({ success: '0', msg: 'Please declare Open Result first!' });
         }
         if (row.close_panna && row.close_digit) {
-          // Check if winning report already has close session winners
-          const [existingWins] = await db.query(
-            "SELECT COUNT(*) as count FROM user_winning_report WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?) AND LOWER(session) = 'close'",
-            [game_name, date, date, `${date}%`]
-          );
-          if (existingWins[0].count > 0) {
-            return res.json({ success: '0', msg: 'Result Already Declared and Winners Paid! Delete previous result first to re-declare.' });
-          }
+          // Re-declaring / updating Close result:
+          // Revert previous close winners AND previous Jodi / Sangam winners
+          const rev = await revertWinnersForGame(game_name, date, 'close');
+          revertedCount = rev.revertedCount;
+          isUpdate = true;
         }
         // Update close result
-        await db.query(`UPDATE result_chart SET ${panaVal} = ?, ${digitVal} = ? WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?)`, [declaredPana, declaredDigit, game_name, date, date, `${date}%`]);
+        await db.query(
+          `UPDATE result_chart SET ${panaVal} = ?, ${digitVal} = ? WHERE id = ?`,
+          [declaredPana, declaredDigit, row.id]
+        );
       } else {
+        // sessionKey === 'open'
         if (row.open_panna && row.open_digit) {
-          // Check if winning report already has open session winners
-          const [existingWins] = await db.query(
-            "SELECT COUNT(*) as count FROM user_winning_report WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?) AND LOWER(session) = 'open'",
-            [game_name, date, date, `${date}%`]
-          );
-          if (existingWins[0].count > 0) {
-            return res.json({ success: '0', msg: 'Result Already Declared and Winners Paid! Delete previous result first to re-declare.' });
-          }
+          // Re-declaring / updating Open result:
+          // Revert previous open winners AND previous Jodi / Sangam winners (since Jodi depends on open!)
+          const rev = await revertWinnersForGame(game_name, date, 'open');
+          revertedCount = rev.revertedCount;
+          isUpdate = true;
         }
         // Update open result
-        await db.query(`UPDATE result_chart SET ${panaVal} = ?, ${digitVal} = ? WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?)`, [declaredPana, declaredDigit, game_name, date, date, `${date}%`]);
+        await db.query(
+          `UPDATE result_chart SET ${panaVal} = ?, ${digitVal} = ? WHERE id = ?`,
+          [declaredPana, declaredDigit, row.id]
+        );
       }
     } else {
       if (sessionKey === 'close') {
@@ -903,9 +978,55 @@ exports.declareResult = async (req, res) => {
         AND (game_type = 'Single Digit' OR game_type = 'Single Ank')
       `;
       await processWinners(db, game_name, date, openDigitQuery, [game_name, date, date, `${date}%`, declaredDigit, declaredDigit], 'digit', 'Single Digit', declaredPana, declaredDigit, 'N/A', 'N/A', 'Open');
+
+      // If Close result was already declared in chart, also process new Jodi & Sangam winners!
+      const [[updatedChartRow]] = await db.query(
+        'SELECT * FROM result_chart WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?) LIMIT 1',
+        [game_name, date, date, `${date}%`]
+      );
+      if (updatedChartRow && updatedChartRow.close_panna && updatedChartRow.close_digit) {
+        const openRe = declaredDigit;
+        const closeRe = updatedChartRow.close_digit;
+        const openPa = declaredPana;
+        const closePa = updatedChartRow.close_panna;
+
+        // Jodi Winners
+        const jodiQuery = `
+          SELECT * FROM user_bid_history 
+          WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+          AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
+          AND (game_type = 'Jodi Digit' OR game_type = 'Jodi' OR game_type LIKE '%Jodi%' OR game_type = 'Red Bracket') 
+          AND open_digit = ? AND close_digit = ?
+        `;
+        await processWinners(db, game_name, date, jodiQuery, [game_name, date, date, `${date}%`, openRe, closeRe], 'jodi', 'Jodi Digit', openPa, openRe, closePa, closeRe, 'Close');
+
+        // Half Sangam Winners
+        const halfSangamQuery = `
+          SELECT * FROM user_bid_history 
+          WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+          AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
+          AND game_type = 'Half Sangam' 
+          AND ((open_digit = ? AND close_pana = ?) OR (open_pana = ? AND close_digit = ?))
+        `;
+        await processWinners(db, game_name, date, halfSangamQuery, [game_name, date, date, `${date}%`, openRe, closePa, openPa, closeRe], 'sangam', 'Half Sangam', openPa, openRe, closePa, closeRe, 'Close');
+
+        // Full Sangam Winners
+        const fullSangamQuery = `
+          SELECT * FROM user_bid_history 
+          WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+          AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
+          AND game_type = 'Full Sangam' 
+          AND open_pana = ? AND close_pana = ?
+        `;
+        await processWinners(db, game_name, date, fullSangamQuery, [game_name, date, date, `${date}%`, openPa, closePa], 'sangam', 'Full Sangam', openPa, openRe, closePa, closeRe, 'Close');
+      }
     } else {
+      // sessionKey === 'close'
       // Fetch open result from chart row if available
-      const [[chartRow]] = await db.query('SELECT * FROM result_chart WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?)', [game_name, date, date, `${date}%`]);
+      const [[chartRow]] = await db.query(
+        'SELECT * FROM result_chart WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?)',
+        [game_name, date, date, `${date}%`]
+      );
       const prevOpenPa = chartRow ? chartRow.open_panna : 'N/A';
       const prevOpenRe = chartRow ? chartRow.open_digit : 'N/A';
 
@@ -948,7 +1069,7 @@ exports.declareResult = async (req, res) => {
           SELECT * FROM user_bid_history 
           WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
           AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
-          AND (game_type = 'Jodi Digit' OR game_type = 'Jodi') 
+          AND (game_type = 'Jodi Digit' OR game_type = 'Jodi' OR game_type LIKE '%Jodi%' OR game_type = 'Red Bracket') 
           AND open_digit = ? AND close_digit = ?
         `;
         await processWinners(db, game_name, date, jodiQuery, [game_name, date, date, `${date}%`, openRe, closeRe], 'jodi', 'Jodi Digit', openPa, openRe, closePa, closeRe, 'Close');
@@ -975,7 +1096,11 @@ exports.declareResult = async (req, res) => {
       }
     }
 
-    return res.json({ success: '1', msg: 'Result Declared and Winners credited successfully!' });
+    const successMsg = isUpdate
+      ? `Result updated successfully! Reverted ${revertedCount} previous winner payout(s) from user wallets and credited new winners.`
+      : 'Result Declared and Winners credited successfully!';
+
+    return res.json({ success: '1', msg: successMsg });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: '0', error: err.message });
@@ -1011,42 +1136,15 @@ exports.deleteDeclaredResult = async (req, res) => {
   try {
     const sess = session ? session.toLowerCase() : 'all';
     
-    // 1. Fetch winning records for this game, date, and session
-    let winQuery = "SELECT * FROM user_winning_report WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?)";
-    const winParams = [game_name, date, date, `${date}%`];
-    if (sess === 'open') {
-      winQuery += " AND (LOWER(session) = 'open' OR (session IS NULL AND game_type IN ('Open Pana', 'Single Pana', 'Double Pana', 'Triple Pana', 'Single Digit', 'SP Motor', 'DP Motor')))";
-    } else if (sess === 'close') {
-      winQuery += " AND (LOWER(session) = 'close' OR (session IS NULL AND game_type IN ('Close Pana', 'Single Pana', 'Double Pana', 'Triple Pana', 'Single Digit', 'Jodi Digit', 'Half Sangam', 'Full Sangam', 'SP Motor', 'DP Motor')))";
-    }
-    const [winners] = await db.query(winQuery, winParams);
+    // 1. Revert wallet balances for all matching winners (including Jodi & Sangam)
+    const { revertedCount, totalAmount } = await revertWinnersForGame(game_name, date, sess);
 
-    // 2. Revert wallet balances for each winner
-    const currentDateStr = getISTDateStr();
-    const currentTimeStr = getISTTime12h();
+    // 2. Update or delete result_chart entry
+    const [chartRows] = await db.query(
+      'SELECT * FROM result_chart WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?)',
+      [game_name, date, date, `${date}%`]
+    );
 
-    for (const w of winners) {
-      const phone = w.username || w.phone_number;
-      const winPoints = parseFloat(w.winning_points || '0');
-      if (winPoints > 0) {
-        const [users] = await db.query('SELECT wallet FROM user_info WHERE phone = ?', [phone]);
-        if (users.length > 0) {
-          const currentWallet = parseFloat(users[0].wallet || '0');
-          const newWallet = Math.max(0, currentWallet - winPoints);
-
-          await db.query('UPDATE user_info SET wallet = ? WHERE phone = ?', [newWallet, phone]);
-          await db.query(
-            'INSERT INTO wallet_history (status, date, time, amount, updated_amount, remark, phone_number) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            ['0', currentDateStr, currentTimeStr, winPoints, newWallet, `Revert Win - ${game_name} (${sess.toUpperCase()})`, phone]
-          );
-        }
-      }
-      // Remove winning record
-      await db.query('DELETE FROM user_winning_report WHERE id = ?', [w.id]);
-    }
-
-    // 3. Update or delete result_chart entry
-    const [chartRows] = await db.query('SELECT * FROM result_chart WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?)', [game_name, date, date, `${date}%`]);
     if (chartRows.length > 0) {
       const row = chartRows[0];
       if (sess === 'open') {
@@ -1068,7 +1166,7 @@ exports.deleteDeclaredResult = async (req, res) => {
 
     return res.json({
       success: '1',
-      msg: `Result deleted and winnings reverted for ${winners.length} winner(s)!`
+      msg: `Result deleted and payouts reverted for ${revertedCount} winner(s) (₹${totalAmount}) successfully!`
     });
   } catch (err) {
     console.error(err);
@@ -1222,7 +1320,7 @@ exports.previewWinners = async (req, res) => {
            LEFT JOIN user_info u ON (u.phone = b.username OR u.phone = REPLACE(b.username, '+91', '') OR CONCAT('+91', u.phone) = b.username) 
            WHERE TRIM(LOWER(b.game_name)) = TRIM(LOWER(?)) 
            AND (b.date = ? OR b.date = ? OR b.date = ? OR b.date LIKE ?) 
-           AND (b.game_type = 'Jodi Digit' OR b.game_type = 'Jodi') 
+           AND (b.game_type = 'Jodi Digit' OR b.game_type = 'Jodi' OR b.game_type LIKE '%Jodi%' OR b.game_type = 'Red Bracket') 
            AND b.open_digit = ? AND b.close_digit = ?`,
           [game_name, date, altDate1, altDate2, `${date}%`, openRe, declaredDigit]
         );
@@ -1847,7 +1945,7 @@ exports.approveCommission = async (req, res) => {
         await db.query('UPDATE user_referral_commission SET status = "1" WHERE id = ?', [id]);
         await db.query('UPDATE user_info SET wallet = wallet + ? WHERE phone = ?', [amount, referrer_phone]);
         const today = getISTDateStr();
-        const time = getISTTimeStr();
+        const time = getISTTime12h();
         await db.query('INSERT INTO wallet_history (status, date, time, amount, updated_amount, remark, phone_number) VALUES ("1", ?, ?, ?, ?, "Referral Commission", ?)', [today, time, amount, amount, referrer_phone]);
       }
     }
@@ -2542,7 +2640,7 @@ exports.addFundToUserWallet = async (req, res) => {
     await db.query('UPDATE user_info SET wallet = ? WHERE phone = ?', [newWallet, phone]);
 
     const dateStr = getISTDateStr();
-    const timeStr = getISTTimeStr();
+    const timeStr = getISTTime12h();
     const receivedAmount = `+${addedAmount}`;
     const remark = 'Points Added By Admin ';
 
@@ -3135,7 +3233,7 @@ exports.adjustUserWallet = async (req, res) => {
     await db.query('UPDATE user_info SET wallet = ? WHERE phone = ?', [newWallet, userPhone]);
 
     const dateStr = getISTDateStr();
-    const timeStr = getISTTimeStr();
+    const timeStr = getISTTime12h();
     const finalRemark = remark && remark.trim() !== '' ? remark.trim() : defaultRemark;
 
     await db.query(
@@ -3201,7 +3299,7 @@ exports.processReferralCommission = async (userPhone, triggerType, triggerAmount
     await db.query('UPDATE user_info SET wallet = wallet + ? WHERE phone = ?', [commissionAmt, referrerPhone]);
     const [[refU]] = await db.query('SELECT wallet FROM user_info WHERE phone = ?', [referrerPhone]);
     const todayStr = getISTDateStr();
-    const timeStr = getISTTimeStr();
+    const timeStr = getISTTime12h();
     const remarkStr = `Referral Commission (${rType}) from ${userPhone}`;
 
     await db.query(

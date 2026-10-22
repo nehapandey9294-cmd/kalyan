@@ -138,4 +138,25 @@ export const getFamilyPanas = (digit, includeCut = false) => {
   });
 };
 
+export const RED_BRACKETS_DOUBLES = ['00', '11', '22', '33', '44', '55', '66', '77', '88', '99'];
+export const RED_BRACKETS_CUT = ['05', '50', '16', '61', '27', '72', '38', '83', '49', '94'];
+export const RED_BRACKETS_ALL = [...RED_BRACKETS_DOUBLES, ...RED_BRACKETS_CUT];
+
+export const getFamilyJodis = (jodiStr) => {
+  if (!jodiStr) return [];
+  const clean = String(jodiStr).replace(/\D/g, '').slice(0, 2);
+  if (clean.length !== 2) return [];
+  const a = parseInt(clean[0], 10);
+  const b = parseInt(clean[1], 10);
+  if (isNaN(a) || isNaN(b)) return [];
+  const c = (a + 5) % 10;
+  const d = (b + 5) % 10;
+  const list = [
+    `${a}${b}`, `${a}${d}`, `${c}${b}`, `${c}${d}`,
+    `${b}${a}`, `${d}${a}`, `${b}${c}`, `${d}${c}`
+  ];
+  return Array.from(new Set(list));
+};
+
+
 
