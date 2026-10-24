@@ -1458,7 +1458,9 @@ exports.updateSettings = async (req, res) => {
       auto_active_status,
       deposit_mode,
       active_payment_gateway,
-      auto_upi_id
+      auto_upi_id,
+      privacy_policy_url,
+      data_deletion_url
     } = body;
 
     // Helper for bool/int values
@@ -1488,6 +1490,12 @@ exports.updateSettings = async (req, res) => {
     } catch (e) {}
     try {
       await db.query(`ALTER TABLE admin_settings ADD COLUMN auto_upi_id VARCHAR(150) DEFAULT ''`);
+    } catch (e) {}
+    try {
+      await db.query(`ALTER TABLE admin_settings ADD COLUMN privacy_policy_url TEXT`);
+    } catch (e) {}
+    try {
+      await db.query(`ALTER TABLE admin_settings ADD COLUMN data_deletion_url TEXT`);
     } catch (e) {}
 
     const upiVal = (payment_upi_id !== undefined || upi_payment_id !== undefined) 
@@ -1537,7 +1545,9 @@ exports.updateSettings = async (req, res) => {
         auto_active_status = COALESCE(?, auto_active_status),
         deposit_mode = COALESCE(?, deposit_mode),
         active_payment_gateway = COALESCE(?, active_payment_gateway),
-        auto_upi_id = COALESCE(?, auto_upi_id)
+        auto_upi_id = COALESCE(?, auto_upi_id),
+        privacy_policy_url = COALESCE(?, privacy_policy_url),
+        data_deletion_url = COALESCE(?, data_deletion_url)
        WHERE id = 1`,
       [
         ac_name !== undefined ? ac_name : null,
@@ -1571,7 +1581,9 @@ exports.updateSettings = async (req, res) => {
         auto_active_status !== undefined && auto_active_status !== null ? String(auto_active_status) : null,
         deposit_mode !== undefined && deposit_mode !== null ? String(deposit_mode) : null,
         active_payment_gateway !== undefined && active_payment_gateway !== null ? String(active_payment_gateway) : null,
-        cleanAutoUpi !== undefined ? cleanAutoUpi : null
+        cleanAutoUpi !== undefined ? cleanAutoUpi : null,
+        privacy_policy_url !== undefined ? privacy_policy_url : null,
+        data_deletion_url !== undefined ? data_deletion_url : null
       ]
     );
 

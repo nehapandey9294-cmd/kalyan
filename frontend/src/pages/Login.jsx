@@ -9,7 +9,7 @@ const Login = ({ setAuth }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [appName, setAppName] = useState('Gama 567');
+  const [appName, setAppName] = useState('Sara 777');
   const [wpNumber, setWpNumber] = useState('');
   const [themeColor, setThemeColor] = useState(() => localStorage.getItem('auth_theme_color') || 'gold');
   const navigate = useNavigate();
@@ -22,6 +22,9 @@ const Login = ({ setAuth }) => {
 
     api.get('/app-info').then(res => {
       if (res.data?.success === '1' && res.data.data) {
+        if (res.data.data.app_name) {
+          setAppName(res.data.data.app_name);
+        }
         const supportNum = res.data.data.wp_mobile || res.data.data.mobile || '';
         if (supportNum) {
           setWpNumber(supportNum);
@@ -77,8 +80,8 @@ const Login = ({ setAuth }) => {
 
   const cleanWpNumber = wpNumber.replace(/\D/g, '');
   const whatsappUrl = cleanWpNumber
-    ? `https://wa.me/${cleanWpNumber.length === 10 ? '91' + cleanWpNumber : cleanWpNumber}?text=${encodeURIComponent(`Hello Gama 567 Support, I need help logging into my account.`)}`
-    : `https://wa.me/?text=${encodeURIComponent(`Hello Gama 567 Support, I need help logging into my account.`)}`;
+    ? `https://wa.me/${cleanWpNumber.length === 10 ? '91' + cleanWpNumber : cleanWpNumber}?text=${encodeURIComponent(`Hello ${appName} Support, I need help logging into my account.`)}`
+    : `https://wa.me/?text=${encodeURIComponent(`Hello ${appName} Support, I need help logging into my account.`)}`;
 
   return (
     <div className={`auth-page-bg auth-theme-${themeColor}`}>
@@ -125,7 +128,7 @@ const Login = ({ setAuth }) => {
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
               <img
                 src="/img/logo.png"
-                alt="Gama 567 Logo"
+                alt={`${appName} Logo`}
                 style={{
                   height: '72px',
                   width: 'auto',
@@ -137,7 +140,7 @@ const Login = ({ setAuth }) => {
               />
             </div>
             <h2 className={`auth-heading-gradient-${themeColor}`} style={{ fontSize: '2rem', marginBottom: '6px', fontWeight: '800', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-              Gama 567
+              {appName}
             </h2>
             <p style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.92rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
               <ShieldCheck size={16} style={{ color: 'var(--color-gold)' }} /> Sign in to access your dashboard

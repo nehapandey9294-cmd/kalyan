@@ -1,14 +1,14 @@
 {
-  "name": "playstore-kalyan-matka",
+  "name": "playstore-sara-777",
   "version": "1.0.0",
-  "description": "Google Play Store UI Clone for Kalyan Satta Matka Play Online",
+  "description": "Google Play Store UI Clone for Sara 777 (Sara777.quizzes)",
   "main": "index.html",
   "scripts": {
     "start": "npx serve . -p 3000",
     "dev": "npx live-server --port=5174",
     "preview": "npx serve ."
   },
-  "keywords": ["google-play", "playstore", "kalyan-matka", "ui-clone"],
+  "keywords": ["google-play", "playstore", "sara-777", "sara777.quizzes", "ui-clone"],
   "author": "ML Tech Solutions",
   "license": "ISC"
 }

@@ -1,5 +1,5 @@
 # Keep all project application classes
--keep class com.gama567.app.** { *; }
+-keep class Sara777.quizzes.** { *; }
 
 # Keep WebView and JavaScript interface methods
 -keepclassmembers class * {

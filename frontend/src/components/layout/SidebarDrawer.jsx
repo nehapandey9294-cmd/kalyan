@@ -16,7 +16,9 @@ import {
   Palette,
   ShieldCheck,
   PlayCircle,
-  HelpCircle
+  HelpCircle,
+  Shield,
+  Trash2
 } from 'lucide-react';
 
 const SidebarDrawer = ({
@@ -155,7 +157,7 @@ const SidebarDrawer = ({
                 overflow: 'hidden'
               }}
             >
-              {user.name || localStorage.getItem('name') || 'Lucky Player'}
+              {user.name || localStorage.getItem('name') || 'Sara 777 Player'}
             </h4>
             <p style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.82rem', margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
               <ShieldCheck size={14} style={{ color: '#10b981' }} />
@@ -275,6 +277,18 @@ const SidebarDrawer = ({
             <li onClick={() => handleNavClick('/support')} style={menuItemStyle}>
               <HelpCircle size={18} style={{ color: 'var(--color-gold)' }} />
               <span>Customer Support</span>
+            </li>
+
+            <hr style={dividerStyle} />
+
+            <li onClick={() => handleNavClick('/privacy-policy')} style={menuItemStyle}>
+              <Shield size={18} style={{ color: 'var(--color-gold)' }} />
+              <span>Privacy Policy</span>
+            </li>
+
+            <li onClick={() => handleNavClick('/data-deletion')} style={menuItemStyle}>
+              <Trash2 size={18} style={{ color: '#f87171' }} />
+              <span>Data Deletion Request</span>
             </li>
 
             <hr style={dividerStyle} />

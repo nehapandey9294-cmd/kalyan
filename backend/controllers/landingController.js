@@ -14,6 +14,8 @@ exports.getLandingInfo = async (req, res) => {
     try { await db.query(`ALTER TABLE admin_settings ADD COLUMN app_link TEXT`); } catch (e) {}
     try { await db.query(`ALTER TABLE admin_settings ADD COLUMN how_to_play TEXT`); } catch (e) {}
     try { await db.query(`ALTER TABLE admin_settings ADD COLUMN alert_message TEXT`); } catch (e) {}
+    try { await db.query(`ALTER TABLE admin_settings ADD COLUMN privacy_policy_url TEXT`); } catch (e) {}
+    try { await db.query(`ALTER TABLE admin_settings ADD COLUMN data_deletion_url TEXT`); } catch (e) {}
 
     const [settingsRows] = await db.query('SELECT * FROM admin_settings LIMIT 1');
     const settings = settingsRows.length > 0 ? settingsRows[0] : {};
@@ -39,14 +41,23 @@ exports.getLandingInfo = async (req, res) => {
       } catch (e) {}
     }
     if (!alertMessage) {
-      alertMessage = "Welcome to India's No.1 Live Matka Result Portal! Download our official app now.";
+      alertMessage = "Welcome to Sara 777! India's No.1 Live Matka Result Portal! Download our official app now.";
+    }
+
+    let appName = 'Sara 777';
+    if (settings.app_link && !settings.app_link.startsWith('http')) {
+      appName = settings.app_link;
+    } else if (settings.upi_name && !settings.upi_name.startsWith('http')) {
+      appName = settings.upi_name;
     }
 
     const rawLink = settings.app_link ? settings.app_link.trim() : '';
-    const appLink = (rawLink && rawLink !== '#' && rawLink !== '/api/download-apk') ? rawLink : '/apk/gama-567.apk';
+    const appLink = (rawLink && rawLink !== '#' && rawLink !== '/api/download-apk') ? rawLink : '/apk/sara-777.apk';
     const howToPlay = settings.how_to_play || '#';
     const mobile = contact.mobile || '';
     const wpMobile = contact.wp_mobile || contact.mobile || '';
+    const privacyPolicyUrl = settings.privacy_policy_url || '/privacy-policy';
+    const dataDeletionUrl = settings.data_deletion_url || '/data-deletion';
 
     return res.json({
       success: '1',
@@ -57,6 +68,8 @@ exports.getLandingInfo = async (req, res) => {
         alert_message: alertMessage,
         mobile: mobile,
         wp_mobile: wpMobile,
+        privacy_policy_url: privacyPolicyUrl,
+        data_deletion_url: dataDeletionUrl,
         rates: ratesRows
       }
     });

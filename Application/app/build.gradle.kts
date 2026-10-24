@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "com.gama567.app"
+    namespace = "Sara777.quizzes"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.gama567.app"
+        applicationId = "Sara777.quizzes"
         minSdk = 24
         targetSdk = 36
         versionCode = 1

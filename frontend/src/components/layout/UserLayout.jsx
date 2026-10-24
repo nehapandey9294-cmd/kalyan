@@ -69,7 +69,7 @@ const UserLayout = ({ children, setAuth }) => {
       }
 
       setUserData({
-        name: prof.name || localStorage.getItem('name') || 'Gama Player',
+        name: prof.name || localStorage.getItem('name') || 'Sara 777 Player',
         phone_number: prof.phone_number || prof.phone || localStorage.getItem('phone') || '',
         phone: prof.phone || localStorage.getItem('phone') || '',
         email: prof.email || '',

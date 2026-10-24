@@ -1,4 +1,4 @@
-# GAMA567 Application Setup
+# Sara 777 Application Setup
 
 ## Environment Configuration
 

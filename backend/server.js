@@ -22,7 +22,7 @@ const apkStaticOptions = {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.apk')) {
       res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-      res.setHeader('Content-Disposition', 'attachment; filename="gama-567.apk"');
+      res.setHeader('Content-Disposition', 'attachment; filename="sara-777.apk"');
       res.setHeader('Cache-Control', 'public, max-age=86400');
     }
   }
@@ -31,14 +31,14 @@ app.use('/apk', express.static(path.join(__dirname, '..', 'landing', 'public', '
 app.use('/apk', express.static(path.join(__dirname, '..', 'landing', 'apk'), apkStaticOptions));
 
 app.get('/api/download-apk', (req, res) => {
-  const apkPath = path.join(__dirname, '..', 'landing', 'public', 'apk', 'gama-567.apk');
-  const fallbackPath = path.join(__dirname, '..', 'landing', 'apk', 'gama-567.apk');
+  const apkPath = path.join(__dirname, '..', 'landing', 'public', 'apk', 'sara-777.apk');
+  const fallbackPath = path.join(__dirname, '..', 'landing', 'apk', 'sara-777.apk');
   const targetApk = fs.existsSync(apkPath) ? apkPath : (fs.existsSync(fallbackPath) ? fallbackPath : null);
 
   if (targetApk) {
     res.setHeader('Content-Type', 'application/vnd.android.package-archive');
     res.setHeader('Cache-Control', 'public, max-age=86400');
-    return res.download(targetApk, 'gama-567.apk');
+    return res.download(targetApk, 'sara-777.apk');
   } else {
     return res.status(404).json({ success: '0', msg: 'APK file not found' });
   }
@@ -93,7 +93,7 @@ if (fs.existsSync(frontendDistPath)) {
   });
 } else {
   app.get('/', (req, res) => {
-    res.json({ message: 'GAMA567 API Server is running!', health: '/api/health' });
+    res.json({ message: 'Sara 777 API Server is running!', health: '/api/health' });
   });
 }
 

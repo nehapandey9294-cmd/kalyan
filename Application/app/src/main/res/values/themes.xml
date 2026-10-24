@@ -1,7 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
 
     <!-- No ActionBar Theme -->
-    <style name="Theme.GAMA567" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <style name="Theme.Sara777" parent="Theme.MaterialComponents.DayNight.NoActionBar">
 
         <!-- Primary Colors -->
         <item name="colorPrimary">@color/purple_500</item>

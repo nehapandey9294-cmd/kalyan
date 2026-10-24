@@ -17,7 +17,7 @@ const Signup = ({ setAuth }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const [appName, setAppName] = useState('Gama 567');
+  const [appName, setAppName] = useState('Sara 777');
   const [wpNumber, setWpNumber] = useState('');
   const [referralStatus, setReferralStatus] = useState('1');
   const [themeColor, setThemeColor] = useState(() => localStorage.getItem('auth_theme_color') || 'gold');
@@ -26,6 +26,9 @@ const Signup = ({ setAuth }) => {
   useEffect(() => {
     api.get('/app-info').then(res => {
       if (res.data?.success === '1' && res.data.data) {
+        if (res.data.data.app_name) {
+          setAppName(res.data.data.app_name);
+        }
         if (res.data.data.referral_status !== undefined) {
           setReferralStatus(String(res.data.data.referral_status));
         }
@@ -148,7 +151,7 @@ const Signup = ({ setAuth }) => {
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
               <img
                 src="/img/logo.png"
-                alt="Gama 567 Logo"
+                alt={`${appName} Logo`}
                 style={{
                   height: '68px',
                   width: 'auto',

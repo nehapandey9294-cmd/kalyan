@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Wallet, User, Mail, Phone, Share2, Copy, Check, Save, ShieldCheck, CheckCircle2, AlertCircle, LogOut, KeyRound } from 'lucide-react';
+import { ArrowLeft, Wallet, User, Mail, Phone, Share2, Copy, Check, Save, ShieldCheck, CheckCircle2, AlertCircle, LogOut, KeyRound, Shield, Trash2, ChevronRight } from 'lucide-react';
 import api from '../utils/api';
 
 const Profile = () => {
@@ -451,7 +451,62 @@ const Profile = () => {
             </div>
           )}
 
-          {/* Card 4: Logout */}
+          {/* Card 4: Legal & Privacy */}
+          <div className="card-glass-v2" style={{ padding: '18px 20px', borderRadius: '16px', marginTop: '18px' }}>
+            <h5 style={{ color: 'var(--color-gold)', fontWeight: '700', margin: '0 0 12px 0', fontSize: '0.98rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Shield size={18} />
+              Privacy & Account Rights
+            </h5>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <Link
+                to="/privacy-policy"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  color: '#ffffff',
+                  textDecoration: 'none',
+                  fontSize: '0.9rem',
+                  fontWeight: '600'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <ShieldCheck size={18} style={{ color: 'var(--color-gold)' }} />
+                  <span>Privacy Policy</span>
+                </div>
+                <ChevronRight size={16} style={{ color: 'rgba(255, 255, 255, 0.5)' }} />
+              </Link>
+
+              <Link
+                to="/data-deletion"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.2)',
+                  color: '#f87171',
+                  textDecoration: 'none',
+                  fontSize: '0.9rem',
+                  fontWeight: '600'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Trash2 size={18} style={{ color: '#ef4444' }} />
+                  <span>Request Account & Data Deletion</span>
+                </div>
+                <ChevronRight size={16} style={{ color: '#f87171' }} />
+              </Link>
+            </div>
+          </div>
+
+          {/* Card 5: Logout */}
           <div className="card-glass-v2" style={{ padding: '16px 20px', borderRadius: '16px', marginTop: '18px' }}>
             <button
               type="button"

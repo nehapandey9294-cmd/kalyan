@@ -4,7 +4,15 @@ import { Menu, PlusCircle, Wallet, LogOut } from 'lucide-react';
 import api from '../../utils/api';
 
 const UserNavbar = ({ onOpenSidebar, wallet = '0', themeColor = 'gold', onThemeChange, onLogout }) => {
-  const [appName, setAppName] = useState('Gama 567');
+  const [appName, setAppName] = useState('Sara 777');
+
+  useEffect(() => {
+    api.get('/app-info').then(res => {
+      if (res.data?.success === '1' && res.data.data?.app_name) {
+        setAppName(res.data.data.app_name);
+      }
+    }).catch(() => {});
+  }, []);
 
   return (
     <header style={{
@@ -50,7 +58,7 @@ const UserNavbar = ({ onOpenSidebar, wallet = '0', themeColor = 'gold', onThemeC
         <Link to="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
           <img
             src="/img/logo.png"
-            alt="Gama 567 Logo"
+            alt="Sara 777 Logo"
             style={{
               height: '46px',
               width: 'auto',

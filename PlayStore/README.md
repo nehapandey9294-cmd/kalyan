@@ -1,6 +1,6 @@
-# Kalyan Satta Matka Play Online - Google Play Store UI
+# Sara 777 - Google Play Store UI
 
-End-to-end pixel-perfect Google Play Store replica for **Kalyan Satta Matka Play Online** (`com.app.kalyaanmatka`).
+End-to-end pixel-perfect Google Play Store replica for **Sara 777** (`Sara777.quizzes`).
 
 ---
 

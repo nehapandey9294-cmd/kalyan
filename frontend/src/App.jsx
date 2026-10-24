@@ -21,6 +21,8 @@ import Support from './pages/Support';
 import PlayGame from './pages/PlayGame';
 import GameTypes from './pages/GameTypes';
 import Chart from './pages/Chart';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import DataDeletion from './pages/DataDeletion';
 
 // Auth Pages
 import Login from './pages/Login';
@@ -102,6 +104,8 @@ function App() {
         <Route path="/game-types" element={renderUserPage(GameTypes)} />
         <Route path="/play-game" element={renderUserPage(PlayGame)} />
         <Route path="/chart" element={renderUserPage(Chart)} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/data-deletion" element={<DataDeletion />} />
 
         {/* User Auth Routes */}
         <Route

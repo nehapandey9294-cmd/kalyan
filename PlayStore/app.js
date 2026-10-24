@@ -1,5 +1,5 @@
 /**
- * Google Play Store - Kalyan Satta Matka Play Online
+ * Google Play Store - Sara 777
  * Client-side Interactivity & UI Logic
  */
 
@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </svg>
           <span>Downloading 0%</span>
         `;
-        showToast('Download started for Kalyan Satta Matka APK...');
+        showToast('Download started for Sara 777 APK...');
 
         let progress = 0;
         const progressInterval = setInterval(() => {
@@ -33,12 +33,12 @@ document.addEventListener('DOMContentLoaded', () => {
             installBtn.classList.remove('installing');
             installBtn.classList.add('installed');
             installText.textContent = 'Open';
-            showToast('✓ App installed successfully! Ready to play.');
+            showToast('✓ Sara 777 installed successfully!');
 
             // Trigger real APK download
             const apkLink = document.createElement('a');
             apkLink.href = '/public/apk/app-release.apk';
-            apkLink.download = 'kalyan-matka-app.apk';
+            apkLink.download = 'sara-777.apk';
             document.body.appendChild(apkLink);
             apkLink.click();
             document.body.removeChild(apkLink);
@@ -53,8 +53,8 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }, 350);
       } else if (installState === 'installed') {
-        showToast('Opening Kalyan Satta Matka App...');
-        window.open('/add-fund', '_blank');
+        showToast('Opening Sara 777 App...');
+        window.open('/', '_blank');
       }
     });
   }

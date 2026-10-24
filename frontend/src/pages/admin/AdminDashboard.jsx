@@ -1055,6 +1055,8 @@ const AdminDashboard = ({ setAdminAuth }) => {
           alert_message: settingsData.alert_message,
           app_link: settingsData.app_link,
           how_to_play: settingsData.how_to_play,
+          privacy_policy_url: settingsData.privacy_policy_url,
+          data_deletion_url: settingsData.data_deletion_url,
           withdraw_days: withdrawDays
         }
       }, getHeaders());
@@ -2335,7 +2337,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
               style={{ color: '#ffffff', fontSize: isMobile ? '0.88rem' : '0.98rem', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}
               onClick={() => handleTabClick('dashboards')}
             >
-              Gama 567 Admin
+              Sara 777 Admin
             </span>
           </div>
 
@@ -2599,7 +2601,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                           Welcome Back!
                         </h5>
                         <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.8rem', margin: 0 }}>
-                          Gama 567 Admin Console
+                          Sara 777 Admin Console
                         </p>
                       </div>
                       <div style={{
@@ -5756,26 +5758,26 @@ const AdminDashboard = ({ setAdminAuth }) => {
                   }}>
                     <div style={{ marginBottom: '18px', borderBottom: '1px solid #eff2f7', paddingBottom: '14px' }}>
                       <h5 style={{ margin: 0, fontSize: '1.08rem', color: '#343a40', fontWeight: '700' }}>
-                        🌐 Landing Website & APK Controls
+                        🌐 App URLs & Legal Compliance (Play Store & Privacy Policy)
                       </h5>
                       <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: '#74788d' }}>
-                        Configure the APK Download Button Link and How to Play Website Link displayed on the public landing portal (gama567).
+                        Configure the APK Download Button Link, How to Play Website Link, Google Play Privacy Policy URL, and Data Deletion Link for Sara 777.
                       </p>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
                       <div>
                         <label style={{ fontSize: '0.84rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>
                           📲 Official APK Download Link (app_link)
                         </label>
                         <input
                           type="text"
-                          placeholder="https://yourdomain.com/app.apk"
+                          placeholder="https://yourdomain.com/sara777.apk"
                           value={settingsData.app_link || ''}
                           onChange={(e) => setSettingsData({ ...settingsData, app_link: e.target.value })}
                           style={{ width: '100%', padding: '10px 14px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem' }}
                         />
-                        <small style={{ color: '#6c757d', display: 'block', marginTop: '4px' }}>Controls the 'Download App' button link on landing website.</small>
+                        <small style={{ color: '#6c757d', display: 'block', marginTop: '4px' }}>Controls the 'Download App' button link.</small>
                       </div>
 
                       <div>
@@ -5789,7 +5791,59 @@ const AdminDashboard = ({ setAdminAuth }) => {
                           onChange={(e) => setSettingsData({ ...settingsData, how_to_play: e.target.value })}
                           style={{ width: '100%', padding: '10px 14px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem' }}
                         />
-                        <small style={{ color: '#6c757d', display: 'block', marginTop: '4px' }}>Controls the 'How to Play' button link on landing website.</small>
+                        <small style={{ color: '#6c757d', display: 'block', marginTop: '4px' }}>Controls the 'How to Play' button link.</small>
+                      </div>
+
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <label style={{ fontSize: '0.84rem', fontWeight: '600', color: '#495057', margin: 0 }}>
+                            🔒 Privacy Policy URL (privacy_policy_url)
+                          </label>
+                          {settingsData.privacy_policy_url && (
+                            <a
+                              href={settingsData.privacy_policy_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ fontSize: '0.78rem', color: '#556ee6', fontWeight: '600', textDecoration: 'none' }}
+                            >
+                              Test Link ↗
+                            </a>
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="https://yourdomain.com/privacy-policy or /privacy-policy"
+                          value={settingsData.privacy_policy_url || ''}
+                          onChange={(e) => setSettingsData({ ...settingsData, privacy_policy_url: e.target.value })}
+                          style={{ width: '100%', padding: '10px 14px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem' }}
+                        />
+                        <small style={{ color: '#6c757d', display: 'block', marginTop: '4px' }}>Required by Google Play Store. Default: /privacy-policy</small>
+                      </div>
+
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <label style={{ fontSize: '0.84rem', fontWeight: '600', color: '#495057', margin: 0 }}>
+                            🗑️ Data Deletion Link (data_deletion_url)
+                          </label>
+                          {settingsData.data_deletion_url && (
+                            <a
+                              href={settingsData.data_deletion_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ fontSize: '0.78rem', color: '#556ee6', fontWeight: '600', textDecoration: 'none' }}
+                            >
+                              Test Link ↗
+                            </a>
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="https://yourdomain.com/data-deletion or /data-deletion"
+                          value={settingsData.data_deletion_url || ''}
+                          onChange={(e) => setSettingsData({ ...settingsData, data_deletion_url: e.target.value })}
+                          style={{ width: '100%', padding: '10px 14px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem' }}
+                        />
+                        <small style={{ color: '#6c757d', display: 'block', marginTop: '4px' }}>Google Play Data Safety deletion request URL. Default: /data-deletion</small>
                       </div>
                     </div>
                   </div>
