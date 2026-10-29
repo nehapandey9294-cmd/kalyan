@@ -192,30 +192,44 @@ exports.getBadgeCounts = async (req, res) => {
   }
 };
 
-// Get List of Users (Supports pagination and search)
+// Get List of Users (Supports pagination, search, and status filter)
 exports.getUsers = async (req, res) => {
   try {
     const search = req.query.search ? req.query.search.trim() : '';
+    const status = req.query.status !== undefined ? String(req.query.status).trim() : '';
+    const filter = req.query.filter ? String(req.query.filter).trim() : '';
     const page = parseInt(req.query.page, 10);
     const limit = parseInt(req.query.limit, 10);
 
-    let whereClause = '';
+    const whereConditions = [];
     const params = [];
 
     if (search) {
-      whereClause = 'WHERE name LIKE ? OR phone LIKE ? OR email LIKE ?';
+      whereConditions.push('(name LIKE ? OR phone LIKE ? OR email LIKE ?)');
       const searchTerm = `%${search}%`;
       params.push(searchTerm, searchTerm, searchTerm);
     }
 
+    if (status !== '' && status !== 'all') {
+      whereConditions.push('status = ?');
+      params.push(status);
+    } else if (filter === 'unapproved') {
+      whereConditions.push("status = '0'");
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
     if (page && limit) {
-      const offset = (page - 1) * limit;
+      const safePage = Math.max(1, page);
+      const safeLimit = Math.max(1, Math.min(500, limit));
+      const offset = (safePage - 1) * safeLimit;
+
       const [countRes] = await db.query(`SELECT COUNT(*) as total FROM user_info ${whereClause}`, params);
       const total = countRes[0]?.total || 0;
 
       const [users] = await db.query(
-        `SELECT id, name, phone, password, m_pin, email, wallet, status, betting_status, transfer_status, date, referred_by_phone FROM user_info ${whereClause} ORDER BY id DESC LIMIT ? OFFSET ?`,
-        [...params, limit, offset]
+        `SELECT id, name, phone, password, m_pin, email, wallet, status, betting_status, transfer_status, date, referred_by_phone FROM user_info ${whereClause} ORDER BY id DESC LIMIT ${safeLimit} OFFSET ${offset}`,
+        params
       );
 
       return res.json({
@@ -223,14 +237,24 @@ exports.getUsers = async (req, res) => {
         data: users,
         pagination: {
           total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit)
+          page: safePage,
+          limit: safeLimit,
+          totalPages: Math.max(1, Math.ceil(total / safeLimit))
         }
       });
     } else {
       const [users] = await db.query(`SELECT id, name, phone, password, m_pin, email, wallet, status, betting_status, transfer_status, date, referred_by_phone FROM user_info ${whereClause} ORDER BY id DESC`, params);
-      return res.json({ success: '1', data: users, total: users.length });
+      return res.json({
+        success: '1',
+        data: users,
+        total: users.length,
+        pagination: {
+          total: users.length,
+          page: 1,
+          limit: users.length,
+          totalPages: 1
+        }
+      });
     }
   } catch (err) {
     console.error(err);
@@ -2012,36 +2036,150 @@ exports.toggleUserField = async (req, res) => {
   }
 };
 
-// Get Referral Report
+// Get Referral Report (Supports pagination and search)
 exports.getReferralReport = async (req, res) => {
   try {
-    const [list] = await db.query(`
+    const { search } = req.query;
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
+
+    const conditions = ["u.referred_by_phone IS NOT NULL AND TRIM(u.referred_by_phone) != ''"];
+    const params = [];
+
+    if (search && search.trim() !== '') {
+      conditions.push('(u.name LIKE ? OR u.phone LIKE ? OR u.referred_by_phone LIKE ? OR r.name LIKE ?)');
+      const s = `%${search.trim()}%`;
+      params.push(s, s, s, s);
+    }
+
+    const whereClause = ' WHERE ' + conditions.join(' AND ');
+
+    const [countRes] = await db.query(`
+      SELECT COUNT(*) as total
+      FROM user_info u
+      LEFT JOIN user_info r ON r.phone = u.referred_by_phone
+      ${whereClause}
+    `, params);
+    const total = countRes[0]?.total || 0;
+
+    let query = `
       SELECT u.id, u.name, u.phone, u.date, u.referred_by_phone, r.name AS referrer_name
       FROM user_info u
       LEFT JOIN user_info r ON r.phone = u.referred_by_phone
-      WHERE u.referred_by_phone IS NOT NULL AND TRIM(u.referred_by_phone) != ''
-      ORDER BY u.date DESC
-    `);
-    return res.json({ success: '1', data: list });
+      ${whereClause}
+      ORDER BY u.id DESC
+    `;
+
+    if (page && limit) {
+      const safePage = Math.max(1, page);
+      const safeLimit = Math.max(1, Math.min(500, limit));
+      const offset = (safePage - 1) * safeLimit;
+      query += ` LIMIT ${safeLimit} OFFSET ${offset}`;
+
+      const [list] = await db.query(query, params);
+      return res.json({
+        success: '1',
+        data: list,
+        pagination: {
+          total,
+          page: safePage,
+          limit: safeLimit,
+          totalPages: Math.max(1, Math.ceil(total / safeLimit))
+        }
+      });
+    } else {
+      query += ' LIMIT 1000';
+      const [list] = await db.query(query, params);
+      return res.json({
+        success: '1',
+        data: list,
+        pagination: {
+          total,
+          page: 1,
+          limit: list.length,
+          totalPages: 1
+        }
+      });
+    }
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: '0', error: err.message });
   }
 };
 
-// Get Commission Report (Pending approval)
+// Get Commission Report (Pending approval, supports pagination and search)
 exports.getCommissionReport = async (req, res) => {
   try {
-    const { from_date, to_date } = req.query;
-    let query = 'SELECT c.*, r.name as referrer_name FROM user_referral_commission c LEFT JOIN user_info r ON r.phone = c.referrer_phone WHERE c.status = "0"';
+    const { from_date, to_date, search } = req.query;
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
+
+    const conditions = ['c.status = "0"'];
     const params = [];
+
     if (from_date && to_date) {
-      query += ' AND c.bid_date BETWEEN ? AND ?';
+      conditions.push('c.bid_date BETWEEN ? AND ?');
       params.push(from_date, to_date);
     }
-    query += ' ORDER BY c.id DESC';
-    const [rows] = await db.query(query, params);
-    return res.json({ success: '1', data: rows });
+
+    if (search && search.trim() !== '') {
+      conditions.push('(c.referrer_phone LIKE ? OR r.name LIKE ? OR c.referred_phone LIKE ? OR c.game_name LIKE ?)');
+      const s = `%${search.trim()}%`;
+      params.push(s, s, s, s);
+    }
+
+    const whereClause = ' WHERE ' + conditions.join(' AND ');
+
+    const [countRes] = await db.query(`
+      SELECT COUNT(*) as total, COALESCE(SUM(CAST(c.amount AS DECIMAL(10,2))), 0) as total_amount
+      FROM user_referral_commission c 
+      LEFT JOIN user_info r ON r.phone = c.referrer_phone 
+      ${whereClause}
+    `, params);
+    const total = countRes[0]?.total || 0;
+    const totalAmount = parseFloat(countRes[0]?.total_amount) || 0;
+
+    let query = `
+      SELECT c.*, r.name as referrer_name 
+      FROM user_referral_commission c 
+      LEFT JOIN user_info r ON r.phone = c.referrer_phone 
+      ${whereClause}
+      ORDER BY c.id DESC
+    `;
+
+    if (page && limit) {
+      const safePage = Math.max(1, page);
+      const safeLimit = Math.max(1, Math.min(500, limit));
+      const offset = (safePage - 1) * safeLimit;
+      query += ` LIMIT ${safeLimit} OFFSET ${offset}`;
+
+      const [rows] = await db.query(query, params);
+      return res.json({
+        success: '1',
+        data: rows,
+        total_amount: totalAmount,
+        pagination: {
+          total,
+          page: safePage,
+          limit: safeLimit,
+          totalPages: Math.max(1, Math.ceil(total / safeLimit))
+        }
+      });
+    } else {
+      query += ' LIMIT 1000';
+      const [rows] = await db.query(query, params);
+      return res.json({
+        success: '1',
+        data: rows,
+        total_amount: totalAmount,
+        pagination: {
+          total,
+          page: 1,
+          limit: rows.length,
+          totalPages: 1
+        }
+      });
+    }
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: '0', error: err.message });
@@ -2073,17 +2211,15 @@ exports.approveCommission = async (req, res) => {
   }
 };
 
-// Get Auto Deposits History (Enhanced with date filter and summaries)
+// Get Auto Deposits History (Enhanced with date filter, server pagination, and summaries)
 exports.getAutoDeposits = async (req, res) => {
   try {
     const { date, search } = req.query;
-    let query = `
-      SELECT d.*, u.name as user_name, u.id as user_id
-      FROM user_auto_deposite d
-      LEFT JOIN user_info u ON u.phone = d.username
-    `;
-    const params = [];
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
+
     const conditions = [];
+    const params = [];
 
     if (date && date !== 'all' && date.trim() !== '') {
       const cleanDate = date.trim();
@@ -2104,42 +2240,70 @@ exports.getAutoDeposits = async (req, res) => {
       params.push(s, s, s, s);
     }
 
-    if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
+    const whereClause = conditions.length > 0 ? ' WHERE ' + conditions.join(' AND ') : '';
+
+    // Calculate totals across whole dataset matching filter
+    const [totalsRes] = await db.query(`
+      SELECT 
+        COUNT(*) as total_count,
+        COALESCE(SUM(CAST(d.amount AS DECIMAL(10,2))), 0) as total_transfer,
+        COALESCE(SUM(CASE WHEN d.status = '1' OR d.status = 1 THEN CAST(d.amount AS DECIMAL(10,2)) ELSE 0 END), 0) as total_approved,
+        COALESCE(SUM(CASE WHEN d.status = '-1' OR d.status = -1 THEN CAST(d.amount AS DECIMAL(10,2)) ELSE 0 END), 0) as total_rejected,
+        COALESCE(SUM(CASE WHEN d.status = '0' OR d.status = 0 OR d.status IS NULL THEN CAST(d.amount AS DECIMAL(10,2)) ELSE 0 END), 0) as total_pending
+      FROM user_auto_deposite d
+      LEFT JOIN user_info u ON u.phone = d.username
+      ${whereClause}
+    `, params);
+
+    const total = totalsRes[0]?.total_count || 0;
+    const totals = {
+      total_transfer: parseFloat(totalsRes[0]?.total_transfer) || 0,
+      total_approved: parseFloat(totalsRes[0]?.total_approved) || 0,
+      total_rejected: parseFloat(totalsRes[0]?.total_rejected) || 0,
+      total_pending: parseFloat(totalsRes[0]?.total_pending) || 0
+    };
+
+    let query = `
+      SELECT d.*, u.name as user_name, u.id as user_id
+      FROM user_auto_deposite d
+      LEFT JOIN user_info u ON u.phone = d.username
+      ${whereClause}
+      ORDER BY d.id DESC
+    `;
+
+    if (page && limit) {
+      const safePage = Math.max(1, page);
+      const safeLimit = Math.max(1, Math.min(500, limit));
+      const offset = (safePage - 1) * safeLimit;
+      query += ` LIMIT ${safeLimit} OFFSET ${offset}`;
+
+      const [deposits] = await db.query(query, params);
+      return res.json({
+        success: '1',
+        data: deposits,
+        totals,
+        pagination: {
+          total,
+          page: safePage,
+          limit: safeLimit,
+          totalPages: Math.max(1, Math.ceil(total / safeLimit))
+        }
+      });
+    } else {
+      query += ' LIMIT 2000';
+      const [deposits] = await db.query(query, params);
+      return res.json({
+        success: '1',
+        data: deposits,
+        totals,
+        pagination: {
+          total,
+          page: 1,
+          limit: deposits.length,
+          totalPages: 1
+        }
+      });
     }
-
-    query += ' ORDER BY d.id DESC LIMIT 2000';
-
-    const [deposits] = await db.query(query, params);
-
-    // Calculate totals
-    let totalTransfer = 0;
-    let totalApproved = 0;
-    let totalRejected = 0;
-    let totalPending = 0;
-
-    deposits.forEach(d => {
-      const amt = Math.abs(Number(d.amount) || 0);
-      totalTransfer += amt;
-      if (d.status === '1' || d.status === 1) {
-        totalApproved += amt;
-      } else if (d.status === '-1' || d.status === -1) {
-        totalRejected += amt;
-      } else {
-        totalPending += amt;
-      }
-    });
-
-    return res.json({
-      success: '1',
-      data: deposits,
-      totals: {
-        total_transfer: totalTransfer,
-        total_approved: totalApproved,
-        total_rejected: totalRejected,
-        total_pending: totalPending
-      }
-    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: '0', error: err.message });
@@ -2164,19 +2328,79 @@ exports.handleAutoDeposit = async (req, res) => {
   }
 };
 
-// Get Paid Commission Report (status = '1')
+// Get Paid Commission Report (status = '1', supports pagination and search)
 exports.getCommissionPayList = async (req, res) => {
   try {
-    const { from_date, to_date } = req.query;
-    let query = 'SELECT c.*, r.name as referrer_name FROM user_referral_commission c LEFT JOIN user_info r ON r.phone = c.referrer_phone WHERE c.status = "1"';
+    const { from_date, to_date, search } = req.query;
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
+
+    const conditions = ['c.status = "1"'];
     const params = [];
+
     if (from_date && to_date) {
-      query += ' AND DATE(c.created_at) BETWEEN ? AND ?';
+      conditions.push('DATE(c.created_at) BETWEEN ? AND ?');
       params.push(from_date, to_date);
     }
-    query += ' ORDER BY c.created_at DESC';
-    const [rows] = await db.query(query, params);
-    return res.json({ success: '1', data: rows });
+
+    if (search && search.trim() !== '') {
+      conditions.push('(c.referrer_phone LIKE ? OR r.name LIKE ? OR c.referred_phone LIKE ? OR c.game_name LIKE ?)');
+      const s = `%${search.trim()}%`;
+      params.push(s, s, s, s);
+    }
+
+    const whereClause = ' WHERE ' + conditions.join(' AND ');
+
+    const [countRes] = await db.query(`
+      SELECT COUNT(*) as total, COALESCE(SUM(CAST(c.amount AS DECIMAL(10,2))), 0) as total_amount
+      FROM user_referral_commission c 
+      LEFT JOIN user_info r ON r.phone = c.referrer_phone 
+      ${whereClause}
+    `, params);
+    const total = countRes[0]?.total || 0;
+    const totalAmount = parseFloat(countRes[0]?.total_amount) || 0;
+
+    let query = `
+      SELECT c.*, r.name as referrer_name 
+      FROM user_referral_commission c 
+      LEFT JOIN user_info r ON r.phone = c.referrer_phone 
+      ${whereClause}
+      ORDER BY c.created_at DESC
+    `;
+
+    if (page && limit) {
+      const safePage = Math.max(1, page);
+      const safeLimit = Math.max(1, Math.min(500, limit));
+      const offset = (safePage - 1) * safeLimit;
+      query += ` LIMIT ${safeLimit} OFFSET ${offset}`;
+
+      const [rows] = await db.query(query, params);
+      return res.json({
+        success: '1',
+        data: rows,
+        total_amount: totalAmount,
+        pagination: {
+          total,
+          page: safePage,
+          limit: safeLimit,
+          totalPages: Math.max(1, Math.ceil(total / safeLimit))
+        }
+      });
+    } else {
+      query += ' LIMIT 1000';
+      const [rows] = await db.query(query, params);
+      return res.json({
+        success: '1',
+        data: rows,
+        total_amount: totalAmount,
+        pagination: {
+          total,
+          page: 1,
+          limit: rows.length,
+          totalPages: 1
+        }
+      });
+    }
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: '0', error: err.message });
@@ -2210,34 +2434,65 @@ exports.changePassword = async (req, res) => {
 // REPORT MANAGEMENT CONTROLLERS (PHP PARITY)
 // ==========================================
 
-// 1. Get Bid History Report
+// 1. Get Bid History Report (Supports pagination and search)
 exports.getBidHistoryReport = async (req, res) => {
   try {
-    const { date, game_name, game_type } = req.query;
+    const { date, game_name, game_type, search } = req.query;
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
     const targetDate = date || new Date().toISOString().slice(0, 10);
     
-    let query = `
-      SELECT b.*, u.name as user_name, u.id as user_id
-      FROM user_bid_history b
-      LEFT JOIN user_info u ON u.phone = b.username
-      WHERE b.date = ?
-    `;
-    const params = [targetDate];
+    const conditions = ['(b.date = ? OR DATE(b.date) = ? OR b.date LIKE ?)'];
+    const params = [targetDate, targetDate, `${targetDate}%`];
 
     if (game_name && game_name !== 'all') {
-      query += ' AND b.game_name = ?';
+      conditions.push('TRIM(LOWER(b.game_name)) = TRIM(LOWER(?))');
       params.push(game_name);
     }
     if (game_type && game_type !== 'all') {
       if (game_type === 'Jodi Digit' || game_type === 'Jodi') {
-        query += " AND (b.game_type = 'Jodi Digit' OR b.game_type = 'Jodi')";
+        conditions.push("(b.game_type = 'Jodi Digit' OR b.game_type = 'Jodi')");
       } else {
-        query += ' AND b.game_type = ?';
+        conditions.push('b.game_type = ?');
         params.push(game_type);
       }
     }
+    if (search && search.trim() !== '') {
+      conditions.push('(b.username LIKE ? OR u.name LIKE ? OR b.open_pana LIKE ? OR b.open_digit LIKE ? OR b.close_pana LIKE ? OR b.close_digit LIKE ? OR b.points_action LIKE ?)');
+      const s = `%${search.trim()}%`;
+      params.push(s, s, s, s, s, s, s);
+    }
 
-    query += ' ORDER BY b.id DESC';
+    const whereClause = ' WHERE ' + conditions.join(' AND ');
+
+    const [countRes] = await db.query(`
+      SELECT COUNT(*) as total, COALESCE(SUM(CAST(b.points_action AS DECIMAL(10,2))), 0) as total_bid_amount
+      FROM user_bid_history b
+      LEFT JOIN user_info u ON u.phone = b.username
+      ${whereClause}
+    `, params);
+    const total = countRes[0]?.total || 0;
+    const totalBidAmount = parseFloat(countRes[0]?.total_bid_amount) || 0;
+
+    let query = `
+      SELECT b.*, u.name as user_name, u.id as user_id
+      FROM user_bid_history b
+      LEFT JOIN user_info u ON u.phone = b.username
+      ${whereClause}
+      ORDER BY b.id DESC
+    `;
+
+    let safePage = 1;
+    let safeLimit = total || 1;
+    if (page && limit) {
+      safePage = Math.max(1, page);
+      safeLimit = Math.max(1, Math.min(500, limit));
+      const offset = (safePage - 1) * safeLimit;
+      query += ` LIMIT ${safeLimit} OFFSET ${offset}`;
+    } else {
+      query += ' LIMIT 1000';
+    }
+
     const [rows] = await db.query(query, params);
     const formattedRows = rows.map(item => {
       let { open_digit, close_digit, game_type } = item;
@@ -2258,7 +2513,18 @@ exports.getBidHistoryReport = async (req, res) => {
         close_digit: close_digit !== undefined ? close_digit : item.close_digit
       };
     });
-    return res.json({ success: '1', data: formattedRows });
+
+    return res.json({
+      success: '1',
+      data: formattedRows,
+      total_bid_amount: totalBidAmount,
+      pagination: {
+        total,
+        page: safePage,
+        limit: safeLimit,
+        totalPages: Math.max(1, Math.ceil(total / (page && limit ? safeLimit : (total || 1))))
+      }
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: '0', error: err.message });
@@ -2390,30 +2656,65 @@ exports.getCustomerSellReport = async (req, res) => {
   }
 };
 
-// 3. Get Winning Report
+// 3. Get Winning Report (Supports pagination and search)
 exports.getWinningReport = async (req, res) => {
   try {
-    const { date, game_name, market_status } = req.query;
+    const { date, game_name, market_status, search } = req.query;
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
     const targetDate = date || new Date().toISOString().slice(0, 10);
+
+    const conditions = ['(w.date = ? OR DATE(w.date) = ? OR w.date LIKE ?)'];
+    const params = [targetDate, targetDate, `${targetDate}%`];
+
+    if (game_name && game_name !== 'all') {
+      conditions.push('TRIM(LOWER(w.game_name)) = TRIM(LOWER(?))');
+      params.push(game_name);
+    }
+    if (market_status && market_status !== 'all') {
+      conditions.push('LOWER(w.session) = LOWER(?)');
+      params.push(market_status);
+    }
+    if (search && search.trim() !== '') {
+      conditions.push('(w.username LIKE ? OR u.name LIKE ? OR w.open_pana LIKE ? OR w.open_digit LIKE ? OR w.close_pana LIKE ? OR w.close_digit LIKE ? OR w.winning_points LIKE ?)');
+      const s = `%${search.trim()}%`;
+      params.push(s, s, s, s, s, s, s);
+    }
+
+    const whereClause = ' WHERE ' + conditions.join(' AND ');
+
+    const [sumRes] = await db.query(`
+      SELECT COUNT(*) as total_count,
+             COALESCE(SUM(CAST(w.winning_points AS DECIMAL(10,2))), 0) as total_winning,
+             COALESCE(SUM(CAST(w.points_action AS DECIMAL(10,2))), 0) as total_points
+      FROM user_winning_report w
+      LEFT JOIN user_info u ON (u.phone = w.username OR u.phone = REPLACE(w.username, '+91', '') OR CONCAT('+91', u.phone) = w.username)
+      ${whereClause}
+    `, params);
+
+    const total = sumRes[0]?.total_count || 0;
+    const totalWinning = parseFloat(sumRes[0]?.total_winning) || 0;
+    const totalPoints = parseFloat(sumRes[0]?.total_points) || 0;
 
     let query = `
       SELECT w.*, u.name as user_name, u.id as user_id
       FROM user_winning_report w
       LEFT JOIN user_info u ON (u.phone = w.username OR u.phone = REPLACE(w.username, '+91', '') OR CONCAT('+91', u.phone) = w.username)
-      WHERE (w.date = ? OR DATE(w.date) = ? OR w.date LIKE ?)
+      ${whereClause}
+      ORDER BY w.id DESC
     `;
-    const params = [targetDate, targetDate, `${targetDate}%`];
 
-    if (game_name && game_name !== 'all') {
-      query += ' AND TRIM(LOWER(w.game_name)) = TRIM(LOWER(?))';
-      params.push(game_name);
-    }
-    if (market_status && market_status !== 'all') {
-      query += ' AND LOWER(w.session) = LOWER(?)';
-      params.push(market_status);
+    let safePage = 1;
+    let safeLimit = total || 1;
+    if (page && limit) {
+      safePage = Math.max(1, page);
+      safeLimit = Math.max(1, Math.min(500, limit));
+      const offset = (safePage - 1) * safeLimit;
+      query += ` LIMIT ${safeLimit} OFFSET ${offset}`;
+    } else {
+      query += ' LIMIT 1000';
     }
 
-    query += ' ORDER BY w.id DESC';
     const [rows] = await db.query(query, params);
 
     // Format rows to ensure game_type is descriptive (SP, DP, TP) if stored as Open Pana / Close Pana
@@ -2436,18 +2737,17 @@ exports.getWinningReport = async (req, res) => {
       };
     });
 
-    let totalWinning = 0;
-    let totalPoints = 0;
-    formattedRows.forEach(r => {
-      totalWinning += Number(r.winning_points) || 0;
-      totalPoints += Number(r.points_action) || 0;
-    });
-
     return res.json({
       success: '1',
       data: formattedRows,
       total_winning: totalWinning,
-      total_points: totalPoints
+      total_points: totalPoints,
+      pagination: {
+        total,
+        page: safePage,
+        limit: safeLimit,
+        totalPages: Math.max(1, Math.ceil(total / (page && limit ? safeLimit : (total || 1))))
+      }
     });
   } catch (err) {
     console.error(err);
@@ -2455,18 +2755,48 @@ exports.getWinningReport = async (req, res) => {
   }
 };
 
-// 4. Get Transfer Point Report
+// 4. Get Transfer Point Report (Supports pagination and search)
 exports.getTransferReport = async (req, res) => {
   try {
-    const { date } = req.query;
+    const { date, search } = req.query;
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
     const targetDate = date || new Date().toISOString().slice(0, 10);
 
-    const [rows] = await db.query(`
+    const conditions = ["(DATE(date) = ? OR date LIKE ?) AND remark LIKE '%Points Transferred%' AND CAST(amount AS SIGNED) > 0"];
+    const params = [targetDate, `%${targetDate}%`];
+
+    if (search && search.trim() !== '') {
+      conditions.push('(phone_number LIKE ? OR remark LIKE ? OR amount LIKE ?)');
+      const s = `%${search.trim()}%`;
+      params.push(s, s, s);
+    }
+
+    const whereClause = ' WHERE ' + conditions.join(' AND ');
+
+    const [countRes] = await db.query(`SELECT COUNT(*) as total, COALESCE(SUM(CAST(amount AS DECIMAL(10,2))), 0) as total_amount FROM wallet_history ${whereClause}`, params);
+    const total = countRes[0]?.total || 0;
+    const totalAmount = parseFloat(countRes[0]?.total_amount) || 0;
+
+    let query = `
       SELECT id, status, DATE_FORMAT(date, '%Y-%m-%d') as date, time, amount, updated_amount, remark, phone_number
       FROM wallet_history
-      WHERE DATE(date) = ? AND remark LIKE '%Points Transferred%' AND CAST(amount AS SIGNED) > 0
+      ${whereClause}
       ORDER BY id DESC
-    `, [targetDate]);
+    `;
+
+    let safePage = 1;
+    let safeLimit = total || 1;
+    if (page && limit) {
+      safePage = Math.max(1, page);
+      safeLimit = Math.max(1, Math.min(500, limit));
+      const offset = (safePage - 1) * safeLimit;
+      query += ` LIMIT ${safeLimit} OFFSET ${offset}`;
+    } else {
+      query += ' LIMIT 1000';
+    }
+
+    const [rows] = await db.query(query, params);
 
     const phones = new Set();
     rows.forEach(r => {
@@ -2483,15 +2813,13 @@ exports.getTransferReport = async (req, res) => {
       });
     }
 
-    let totalAmount = 0;
     const data = rows.map((r, index) => {
       const senderPhone = r.remark ? r.remark.trim().slice(-10) : '';
       const receiverPhone = r.phone_number ? r.phone_number.trim() : '';
       const amt = Number(r.amount) || 0;
-      totalAmount += amt;
 
       return {
-        sno: index + 1,
+        sno: (safePage - 1) * safeLimit + index + 1,
         id: r.id,
         sender_name: userMap[senderPhone] ? userMap[senderPhone].name : 'N/A',
         sender_phone: senderPhone,
@@ -2508,7 +2836,13 @@ exports.getTransferReport = async (req, res) => {
     return res.json({
       success: '1',
       total_amount: totalAmount,
-      data
+      data,
+      pagination: {
+        total,
+        page: safePage,
+        limit: safeLimit,
+        totalPages: Math.max(1, Math.ceil(total / (page && limit ? safeLimit : (total || 1))))
+      }
     });
   } catch (err) {
     console.error(err);
@@ -2516,10 +2850,12 @@ exports.getTransferReport = async (req, res) => {
   }
 };
 
-// 5. Get Withdraw Report (Searches both user_withdraw_request & wallet_history with fallback)
+// 5. Get Withdraw Report (Searches both user_withdraw_request & wallet_history with pagination)
 exports.getWithdrawalReport = async (req, res) => {
   try {
     const { date, search } = req.query;
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
 
     let reqParams = [];
     let whereReq = " WHERE 1=1 ";
@@ -2549,77 +2885,52 @@ exports.getWithdrawalReport = async (req, res) => {
       FROM user_withdraw_request w
       LEFT JOIN user_info u ON (u.phone = w.username OR RIGHT(u.phone, 10) = RIGHT(w.username, 10))
       ${whereReq}
-      ORDER BY w.id DESC LIMIT 500
+      ORDER BY w.id DESC
     `;
 
-    const [reqRows] = await db.query(queryReq, reqParams);
-    let rows = reqRows || [];
+    const [countReq] = await db.query(`
+      SELECT COUNT(*) as total, COALESCE(SUM(CAST(COALESCE(NULLIF(w.points, 0), w.amount, 0) AS DECIMAL(10,2))), 0) as total_amount
+      FROM user_withdraw_request w
+      LEFT JOIN user_info u ON (u.phone = w.username OR RIGHT(u.phone, 10) = RIGHT(w.username, 10))
+      ${whereReq}
+    `, reqParams);
 
-    // 2. Fallback to wallet_history if user_withdraw_request is empty
-    if (rows.length === 0) {
-      let walletParams = [];
-      if (date && date !== 'all' && date.trim() !== '') {
-        const parts = date.split('-');
-        let altDate = date;
-        if (parts.length === 3 && parts[0].length === 4) {
-          altDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
-        }
-        walletParams.push(date, `%${date}%`, `%${altDate}%`);
-      }
-      if (search && search.trim() !== '') {
-        const s = `%${search.trim()}%`;
-        whereHist += " AND (w.phone_number LIKE ? OR u.name LIKE ? OR w.remark LIKE ?)";
-        walletParams.push(s, s, s);
-      }
+    let total = countReq[0]?.total || 0;
+    let totalAmount = parseFloat(countReq[0]?.total_amount) || 0;
 
-      let queryHist = `
-        SELECT w.id, w.status, w.date, w.time, ABS(w.amount) as amount, w.remark,
-               w.phone_number, u.name as user_name, u.id as user_id
-        FROM wallet_history w
-        LEFT JOIN user_info u ON u.phone = w.phone_number
-        ${whereHist}
-        ORDER BY w.id DESC LIMIT 500
-      `;
-      const [histRows] = await db.query(queryHist, walletParams);
-      if (histRows && histRows.length > 0) {
-        rows = histRows;
-      }
+    let safePage = 1;
+    let safeLimit = total || 1;
+    if (page && limit) {
+      safePage = Math.max(1, page);
+      safeLimit = Math.max(1, Math.min(500, limit));
+      const offset = (safePage - 1) * safeLimit;
+      queryReq += ` LIMIT ${safeLimit} OFFSET ${offset}`;
+    } else {
+      queryReq += ' LIMIT 1000';
     }
 
-    // 3. Fallback to latest withdrawals overall if date filter returned empty
-    if (rows.length === 0 && date && date !== 'all') {
-      let fallbackQuery = `
+    let [reqRows] = await db.query(queryReq, reqParams);
+    let rows = reqRows || [];
+
+    // Fallback if empty and date was set
+    if (rows.length === 0 && (!date || date === 'all')) {
+      const [fallbackRows] = await db.query(`
         SELECT w.id, w.status, w.date, w.time, COALESCE(NULLIF(w.points, 0), w.amount, 0) as amount, w.remark,
                COALESCE(w.username, u.phone) as phone_number, u.name as user_name, u.id as user_id
         FROM user_withdraw_request w
         LEFT JOIN user_info u ON (u.phone = w.username OR RIGHT(u.phone, 10) = RIGHT(w.username, 10))
         ORDER BY w.id DESC LIMIT 500
-      `;
-      const [fallbackRows] = await db.query(fallbackQuery);
+      `);
       if (fallbackRows && fallbackRows.length > 0) {
         rows = fallbackRows;
-      } else {
-        let walletFallback = `
-          SELECT w.id, w.status, w.date, w.time, ABS(w.amount) as amount, w.remark,
-                 w.phone_number, u.name as user_name, u.id as user_id
-          FROM wallet_history w
-          LEFT JOIN user_info u ON u.phone = w.phone_number
-          WHERE (w.remark LIKE '%Withdraw%' OR w.remark LIKE '%Transferred to your Account%' OR w.remark LIKE '%Withdrawal%')
-          ORDER BY w.id DESC LIMIT 500
-        `;
-        const [wFallbackRows] = await db.query(walletFallback);
-        if (wFallbackRows && wFallbackRows.length > 0) {
-          rows = wFallbackRows;
-        }
+        total = fallbackRows.length;
       }
     }
 
-    let totalAmount = 0;
     const data = rows.map((r, index) => {
       const amt = Math.abs(Number(r.amount) || 0);
-      totalAmount += amt;
       return {
-        sno: index + 1,
+        sno: (safePage - 1) * safeLimit + index + 1,
         id: r.id,
         user_name: r.user_name || 'N/A',
         phone_number: r.phone_number || 'N/A',
@@ -2635,7 +2946,13 @@ exports.getWithdrawalReport = async (req, res) => {
     return res.json({
       success: '1',
       total_amount: totalAmount,
-      data
+      data,
+      pagination: {
+        total,
+        page: safePage,
+        limit: safeLimit,
+        totalPages: Math.max(1, Math.ceil(total / (page && limit ? safeLimit : (total || 1))))
+      }
     });
   } catch (err) {
     console.error(err);
@@ -2650,30 +2967,84 @@ exports.getWithdrawalReport = async (req, res) => {
 // 1. Get Fund Requests (PHP fund-request-management.php parity)
 exports.getFundRequests = async (req, res) => {
   try {
-    const { date } = req.query;
+    const { date, search, status } = req.query;
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
+
+    const whereConditions = [];
+    const params = [];
+
+    if (date && date !== 'all' && date.trim() !== '') {
+      whereConditions.push('f.date LIKE ?');
+      params.push(`%${date.trim()}%`);
+    }
+
+    if (status !== undefined && status !== '' && status !== 'all') {
+      whereConditions.push('f.status = ?');
+      params.push(status);
+    }
+
+    if (search && search.trim() !== '') {
+      whereConditions.push('(f.username LIKE ? OR u.name LIKE ? OR f.trans_details LIKE ? OR f.amount LIKE ?)');
+      const s = `%${search.trim()}%`;
+      params.push(s, s, s, s);
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+    // Calculate total count and total amount matching criteria
+    const [sumRes] = await db.query(
+      `SELECT COUNT(*) as total_count, COALESCE(SUM(CAST(COALESCE(NULLIF(f.amount, 0), f.points, 0) AS DECIMAL(10,2))), 0) as total_amount 
+       FROM user_fund_request f 
+       LEFT JOIN user_info u ON (u.phone = f.username OR (LENGTH(f.username) = 10 AND RIGHT(u.phone, 10) = f.username))
+       ${whereClause}`,
+      params
+    );
+
+    const total = sumRes[0]?.total_count || 0;
+    const totalAmount = parseFloat(sumRes[0]?.total_amount) || 0;
+
     let query = `
       SELECT f.*, u.name as user_name, u.id as user_id, u.wallet as current_wallet
       FROM user_fund_request f
       LEFT JOIN user_info u ON (u.phone = f.username OR (LENGTH(f.username) = 10 AND RIGHT(u.phone, 10) = f.username))
+      ${whereClause}
+      ORDER BY f.id DESC
     `;
-    const params = [];
-    if (date) {
-      query += ' WHERE f.date LIKE ?';
-      params.push(`%${date}%`);
+
+    if (page && limit) {
+      const safePage = Math.max(1, page);
+      const safeLimit = Math.max(1, Math.min(500, limit));
+      const offset = (safePage - 1) * safeLimit;
+      query += ` LIMIT ${safeLimit} OFFSET ${offset}`;
+
+      const [rows] = await db.query(query, params);
+      return res.json({
+        success: '1',
+        total_amount: totalAmount,
+        data: rows,
+        pagination: {
+          total,
+          page: safePage,
+          limit: safeLimit,
+          totalPages: Math.max(1, Math.ceil(total / safeLimit))
+        }
+      });
+    } else {
+      query += ' LIMIT 1000';
+      const [rows] = await db.query(query, params);
+      return res.json({
+        success: '1',
+        total_amount: totalAmount,
+        data: rows,
+        pagination: {
+          total,
+          page: 1,
+          limit: rows.length,
+          totalPages: 1
+        }
+      });
     }
-    query += ' ORDER BY f.id DESC LIMIT 200';
-
-    const [rows] = await db.query(query, params);
-    let totalAmount = 0;
-    rows.forEach(r => {
-      totalAmount += parseFloat(r.amount || r.points || 0);
-    });
-
-    return res.json({
-      success: '1',
-      total_amount: totalAmount,
-      data: rows
-    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: '0', error: err.message });
@@ -2683,7 +3054,52 @@ exports.getFundRequests = async (req, res) => {
 // 2. Get Withdrawal Requests (PHP withdraw-request-management.php parity)
 exports.getWithdrawalRequests = async (req, res) => {
   try {
-    const { date } = req.query;
+    const { date, search, status } = req.query;
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
+
+    const whereConditions = [];
+    const params = [];
+
+    if (date && date !== 'all' && date.trim() !== '') {
+      whereConditions.push('w.date LIKE ?');
+      params.push(`%${date.trim()}%`);
+    }
+
+    if (status !== undefined && status !== '' && status !== 'all') {
+      whereConditions.push('w.status = ?');
+      params.push(status);
+    }
+
+    if (search && search.trim() !== '') {
+      whereConditions.push('(w.username LIKE ? OR u.name LIKE ? OR u.phone LIKE ? OR w.remark LIKE ? OR w.request_number LIKE ?)');
+      const s = `%${search.trim()}%`;
+      params.push(s, s, s, s, s);
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+    // Calculate summary statistics across full dataset matching filter
+    const [totalsRes] = await db.query(`
+      SELECT 
+        COUNT(*) as total_count,
+        COALESCE(SUM(CAST(COALESCE(NULLIF(w.points, 0), w.amount, 0) AS DECIMAL(10,2))), 0) as total_amount,
+        COALESCE(SUM(CASE WHEN w.status = '1' OR w.status = 1 THEN CAST(COALESCE(NULLIF(w.points, 0), w.amount, 0) AS DECIMAL(10,2)) ELSE 0 END), 0) as total_approved,
+        COALESCE(SUM(CASE WHEN w.status = '-1' OR w.status = -1 THEN CAST(COALESCE(NULLIF(w.points, 0), w.amount, 0) AS DECIMAL(10,2)) ELSE 0 END), 0) as total_rejected,
+        COALESCE(SUM(CASE WHEN w.status = '0' OR w.status = 0 OR w.status = 'Pending' THEN CAST(COALESCE(NULLIF(w.points, 0), w.amount, 0) AS DECIMAL(10,2)) ELSE 0 END), 0) as total_pending
+      FROM user_withdraw_request w
+      LEFT JOIN user_info u ON (w.username = u.phone OR RIGHT(w.username, 10) = RIGHT(u.phone, 10))
+      ${whereClause}
+    `, params);
+
+    const total = totalsRes[0]?.total_count || 0;
+    const totals = {
+      total_amount: parseFloat(totalsRes[0]?.total_amount) || 0,
+      total_approved: parseFloat(totalsRes[0]?.total_approved) || 0,
+      total_rejected: parseFloat(totalsRes[0]?.total_rejected) || 0,
+      total_pending: parseFloat(totalsRes[0]?.total_pending) || 0
+    };
+
     let query = `
       SELECT 
         w.*, 
@@ -2701,43 +3117,43 @@ exports.getWithdrawalRequests = async (req, res) => {
         u.googlepay
       FROM user_withdraw_request w
       LEFT JOIN user_info u ON (w.username = u.phone OR RIGHT(w.username, 10) = RIGHT(u.phone, 10))
+      ${whereClause}
+      ORDER BY w.id DESC
     `;
-    const params = [];
-    if (date) {
-      query += ' WHERE w.date LIKE ?';
-      params.push(`%${date}%`);
+
+    if (page && limit) {
+      const safePage = Math.max(1, page);
+      const safeLimit = Math.max(1, Math.min(500, limit));
+      const offset = (safePage - 1) * safeLimit;
+      query += ` LIMIT ${safeLimit} OFFSET ${offset}`;
+
+      const [rows] = await db.query(query, params);
+      return res.json({
+        success: '1',
+        totals,
+        data: rows,
+        pagination: {
+          total,
+          page: safePage,
+          limit: safeLimit,
+          totalPages: Math.max(1, Math.ceil(total / safeLimit))
+        }
+      });
+    } else {
+      query += ' LIMIT 1000';
+      const [rows] = await db.query(query, params);
+      return res.json({
+        success: '1',
+        totals,
+        data: rows,
+        pagination: {
+          total,
+          page: 1,
+          limit: rows.length,
+          totalPages: 1
+        }
+      });
     }
-    query += ' ORDER BY w.id DESC LIMIT 200';
-
-    const [rows] = await db.query(query, params);
-
-    let totalAmount = 0;
-    let totalApproved = 0;
-    let totalRejected = 0;
-    let totalPending = 0;
-
-    rows.forEach(r => {
-      const amt = parseFloat(r.points || r.amount || 0);
-      totalAmount += amt;
-      if (r.status === '1' || r.status === 1) {
-        totalApproved += amt;
-      } else if (r.status === '-1' || r.status === -1) {
-        totalRejected += amt;
-      } else if (r.status === '0' || r.status === 0) {
-        totalPending += amt;
-      }
-    });
-
-    return res.json({
-      success: '1',
-      totals: {
-        total_amount: totalAmount,
-        total_approved: totalApproved,
-        total_rejected: totalRejected,
-        total_pending: totalPending
-      },
-      data: rows
-    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: '0', error: err.message });
@@ -2853,35 +3269,70 @@ exports.executeBidRevert = async (req, res) => {
   }
 };
 
-// 6. Get Add Fund (Admin) Report (PHP add-fund-report.php parity)
+// 6. Get Add Fund (Admin) Report (PHP add-fund-report.php parity, supports pagination and search)
 exports.getAddFundReport = async (req, res) => {
   try {
     const { date, search } = req.query;
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
+
+    const conditions = ["(w.remark LIKE '%Points Added By Admin%' OR w.remark LIKE '%Added By Admin%' OR w.amount LIKE '+%')"];
+    const params = [];
+
+    if (date && date !== 'all' && date.trim() !== '') {
+      conditions.push("(DATE(w.date) = ? OR w.date LIKE ?)");
+      params.push(date, `%${date}%`);
+    }
+
+    if (search && search.trim() !== '') {
+      conditions.push("(w.phone_number LIKE ? OR u.name LIKE ? OR w.remark LIKE ? OR w.amount LIKE ?)");
+      const s = `%${search.trim()}%`;
+      params.push(s, s, s, s);
+    }
+
+    const whereClause = ' WHERE ' + conditions.join(' AND ');
+
+    const [countRes] = await db.query(`
+      SELECT COUNT(*) as total, COALESCE(SUM(CAST(REPLACE(w.amount, '+', '') AS DECIMAL(10,2))), 0) as total_amount
+      FROM wallet_history w
+      LEFT JOIN user_info u ON u.phone = w.phone_number
+      ${whereClause}
+    `, params);
+    const total = countRes[0]?.total || 0;
+    const totalAmount = parseFloat(countRes[0]?.total_amount) || 0;
 
     let query = `
       SELECT w.id, w.status, DATE_FORMAT(w.date, '%Y-%m-%d') as date, w.time, w.amount, w.updated_amount, w.remark, w.phone_number, u.name as user_name, u.id as user_id
       FROM wallet_history w
       LEFT JOIN user_info u ON u.phone = w.phone_number
-      WHERE (w.remark LIKE '%Points Added By Admin%' OR w.remark LIKE '%Added By Admin%' OR w.amount LIKE '+%')
+      ${whereClause}
+      ORDER BY w.id DESC
     `;
-    const params = [];
 
-    if (date && date !== 'all' && date.trim() !== '') {
-      query += " AND (DATE(w.date) = ? OR w.date LIKE ?)";
-      params.push(date, `%${date}%`);
+    let safePage = 1;
+    let safeLimit = total || 1;
+    if (page && limit) {
+      safePage = Math.max(1, page);
+      safeLimit = Math.max(1, Math.min(500, limit));
+      const offset = (safePage - 1) * safeLimit;
+      query += ` LIMIT ${safeLimit} OFFSET ${offset}`;
+    } else {
+      query += ' LIMIT 1000';
     }
-
-    if (search && search.trim() !== '') {
-      query += " AND (w.phone_number LIKE ? OR u.name LIKE ? OR w.remark LIKE ?)";
-      const s = `%${search.trim()}%`;
-      params.push(s, s, s);
-    }
-
-    query += ' ORDER BY w.id DESC LIMIT 500';
 
     const [rows] = await db.query(query, params);
 
-    return res.json({ success: '1', data: rows });
+    return res.json({
+      success: '1',
+      total_amount: totalAmount,
+      data: rows,
+      pagination: {
+        total,
+        page: safePage,
+        limit: safeLimit,
+        totalPages: Math.max(1, Math.ceil(total / (page && limit ? safeLimit : (total || 1))))
+      }
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: '0', error: err.message });

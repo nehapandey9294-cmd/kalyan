@@ -12,7 +12,7 @@ import AdminSupportChat from './AdminSupportChat';
 import chatSocket from '../../utils/chatSocket';
 import api from '../../utils/api';
 import { useAdminSession, clearAdminSession } from '../../utils/adminSession';
-import DataTable from '../../components/common/DataTable';
+import DataTable, { PaginationBar } from '../../components/common/DataTable';
 import { getISTTodayStr, formatDisplayDateTime, formatDisplayDate } from '../../utils/indianTime';
 import {
   SINGLE_DIGITS,
@@ -353,12 +353,18 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const [autoDepositSearch, setAutoDepositSearch] = useState('');
   const [autoDepositPage, setAutoDepositPage] = useState(1);
   const [autoDepositPerPage, setAutoDepositPerPage] = useState(10);
+  const [autoDepositTotalCount, setAutoDepositTotalCount] = useState(0);
+  const [autoDepositTotals, setAutoDepositTotals] = useState({ total_transfer: 0, total_approved: 0, total_rejected: 0, total_pending: 0 });
   const [autoDepositsLoading, setAutoDepositsLoading] = useState(false);
 
   // User Management State (Image 3)
   const [users, setUsers] = useState([]);
   const [userFilter, setUserFilter] = useState('all'); // 'all' or 'unapproved'
   const [userSearch, setUserSearch] = useState('');
+  const [userPage, setUserPage] = useState(1);
+  const [userPerPage, setUserPerPage] = useState(25);
+  const [userTotal, setUserTotal] = useState(0);
+  const [usersLoading, setUsersLoading] = useState(false);
   const [selectedUserModal, setSelectedUserModal] = useState(null);
   const [walletAdjustPoints, setWalletAdjustPoints] = useState('');
   const [walletAdjustType, setWalletAdjustType] = useState('add');
@@ -379,17 +385,29 @@ const AdminDashboard = ({ setAdminAuth }) => {
   // Referral Report State (Image 4)
   const [referrals, setReferrals] = useState([]);
   const [referralSearch, setReferralSearch] = useState('');
+  const [referralPage, setReferralPage] = useState(1);
+  const [referralPerPage, setReferralPerPage] = useState(25);
+  const [referralTotal, setReferralTotal] = useState(0);
+  const [referralsLoading, setReferralsLoading] = useState(false);
 
   // User Commission Pending State (Image 5)
   const [commissionFromDate, setCommissionFromDate] = useState(new Date().toISOString().slice(0, 10));
   const [commissionToDate, setCommissionToDate] = useState(new Date().toISOString().slice(0, 10));
   const [commissionList, setCommissionList] = useState([]);
   const [selectedCommissionIds, setSelectedCommissionIds] = useState([]);
+  const [commissionPage, setCommissionPage] = useState(1);
+  const [commissionPerPage, setCommissionPerPage] = useState(25);
+  const [commissionTotal, setCommissionTotal] = useState(0);
+  const [commissionsLoading, setCommissionsLoading] = useState(false);
 
   // User Commission Pay List State (Matching User Screenshot)
   const [commissionPayList, setCommissionPayList] = useState([]);
   const [payListFromDate, setPayListFromDate] = useState(new Date().toISOString().slice(0, 10));
   const [payListToDate, setPayListToDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payListPage, setPayListPage] = useState(1);
+  const [payListPerPage, setPayListPerPage] = useState(25);
+  const [payListTotal, setPayListTotal] = useState(0);
+  const [payListLoading, setPayListLoading] = useState(false);
 
   // Existing Modules: Rates, Settings, Sliders, Deposits, Withdrawals
   const [rates, setRates] = useState([]);
@@ -512,6 +530,10 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const [bidHistoryGame, setBidHistoryGame] = useState('all');
   const [bidHistoryType, setBidHistoryType] = useState('all');
   const [bidHistoryList, setBidHistoryList] = useState([]);
+  const [bidHistoryPage, setBidHistoryPage] = useState(1);
+  const [bidHistoryPerPage, setBidHistoryPerPage] = useState(25);
+  const [bidHistoryTotalCount, setBidHistoryTotalCount] = useState(0);
+  const [bidHistorySearch, setBidHistorySearch] = useState('');
   const [bidHistoryLoading, setBidHistoryLoading] = useState(false);
   const [editBidModal, setEditBidModal] = useState(null);
   const [editBidForm, setEditBidForm] = useState({ open_pana: '', open_digit: '', close_pana: '', close_digit: '', points_action: '' });
@@ -535,6 +557,10 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const [winningGame, setWinningGame] = useState('all');
   const [winningSession, setWinningSession] = useState('all');
   const [winningList, setWinningList] = useState([]);
+  const [winningPage, setWinningPage] = useState(1);
+  const [winningPerPage, setWinningPerPage] = useState(25);
+  const [winningTotalCount, setWinningTotalCount] = useState(0);
+  const [winningSearch, setWinningSearch] = useState('');
   const [winningTotalAmt, setWinningTotalAmt] = useState(0);
   const [winningTotalPoints, setWinningTotalPoints] = useState(0);
   const [winningLoading, setWinningLoading] = useState(false);
@@ -543,6 +569,10 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const [transferDate, setTransferDate] = useState(new Date().toISOString().slice(0, 10));
   const [transferList, setTransferList] = useState([]);
   const [transferTotal, setTransferTotal] = useState(0);
+  const [transferPage, setTransferPage] = useState(1);
+  const [transferPerPage, setTransferPerPage] = useState(25);
+  const [transferTotalCount, setTransferTotalCount] = useState(0);
+  const [transferSearch, setTransferSearch] = useState('');
   const [transferLoading, setTransferLoading] = useState(false);
 
   // 5. Bid Win Report
@@ -557,12 +587,20 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const [withdrawRepDate, setWithdrawRepDate] = useState('');
   const [withdrawRepList, setWithdrawRepList] = useState([]);
   const [withdrawRepTotal, setWithdrawRepTotal] = useState(0);
+  const [withdrawRepPage, setWithdrawRepPage] = useState(1);
+  const [withdrawRepPerPage, setWithdrawRepPerPage] = useState(25);
+  const [withdrawRepTotalCount, setWithdrawRepTotalCount] = useState(0);
+  const [withdrawRepSearch, setWithdrawRepSearch] = useState('');
   const [withdrawRepLoading, setWithdrawRepLoading] = useState(false);
 
   // 7. Auto Deposit History
   const [autoDepDate, setAutoDepDate] = useState('');
   const [autoDepList, setAutoDepList] = useState([]);
   const [autoDepTotals, setAutoDepTotals] = useState({ total_transfer: 0, total_approved: 0, total_rejected: 0, total_pending: 0 });
+  const [autoDepPage, setAutoDepPage] = useState(1);
+  const [autoDepPerPage, setAutoDepPerPage] = useState(25);
+  const [autoDepTotalCount, setAutoDepTotalCount] = useState(0);
+  const [autoDepSearch, setAutoDepSearch] = useState('');
   const [autoDepLoading, setAutoDepLoading] = useState(false);
 
   // ==========================================
@@ -572,12 +610,21 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const [fundReqDate, setFundReqDate] = useState('');
   const [fundReqList, setFundReqList] = useState([]);
   const [fundReqTotal, setFundReqTotal] = useState(0);
+  const [fundReqPage, setFundReqPage] = useState(1);
+  const [fundReqPerPage, setFundReqPerPage] = useState(10);
+  const [fundReqTotalCount, setFundReqTotalCount] = useState(0);
+  const [fundReqSearch, setFundReqSearch] = useState('');
   const [fundReqLoading, setFundReqLoading] = useState(false);
 
   // 2. Withdraw Request (withdrawals)
   const [withReqDate, setWithReqDate] = useState('');
   const [withReqList, setWithReqList] = useState([]);
   const [withReqTotals, setWithReqTotals] = useState({ total_amount: 0, total_approved: 0, total_rejected: 0, total_pending: 0 });
+  const [withReqPage, setWithReqPage] = useState(1);
+  const [withReqPerPage, setWithReqPerPage] = useState(10);
+  const [withReqTotalCount, setWithReqTotalCount] = useState(0);
+  const [withReqSearch, setWithReqSearch] = useState('');
+  const [withReqStatus, setWithReqStatus] = useState('all');
   const [withReqLoading, setWithReqLoading] = useState(false);
   const [selectedWithdrawModal, setSelectedWithdrawModal] = useState(null);
   const [modalUserData, setModalUserData] = useState(null);
@@ -623,6 +670,10 @@ const AdminDashboard = ({ setAdminAuth }) => {
   // 5. Add Fund Report
   const [addFundRepDate, setAddFundRepDate] = useState('');
   const [addFundRepList, setAddFundRepList] = useState([]);
+  const [addFundRepPage, setAddFundRepPage] = useState(1);
+  const [addFundRepPerPage, setAddFundRepPerPage] = useState(25);
+  const [addFundRepTotalCount, setAddFundRepTotalCount] = useState(0);
+  const [addFundRepSearch, setAddFundRepSearch] = useState('');
   const [addFundRepLoading, setAddFundRepLoading] = useState(false);
   // (getHeaders defined at top scope)
 
@@ -785,13 +836,20 @@ const AdminDashboard = ({ setAdminAuth }) => {
     }
   };
 
-  const fetchAutoDeposits = async (selectedDate = autoDepositDate) => {
+  const fetchAutoDeposits = async (selectedDate = autoDepositDate, page = autoDepositPage, limit = autoDepositPerPage, search = autoDepositSearch) => {
     setAutoDepositsLoading(true);
     try {
-      const dateParam = selectedDate && selectedDate !== 'all' ? `?date=${encodeURIComponent(selectedDate)}` : '';
-      const res = await api.get(`/admin/auto-deposits${dateParam}`, getHeaders());
+      const params = new URLSearchParams();
+      if (selectedDate && selectedDate !== 'all') params.append('date', selectedDate);
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      if (search && search.trim()) params.append('search', search.trim());
+      const queryStr = params.toString() ? `?${params.toString()}` : '';
+      const res = await api.get(`/admin/auto-deposits${queryStr}`, getHeaders());
       if (res.data.success === '1') {
         setAutoDeposits(res.data.data || []);
+        setAutoDepositTotalCount(res.data.pagination?.total || (res.data.data || []).length);
+        if (res.data.totals) setAutoDepositTotals(res.data.totals);
       }
     } catch (err) {
       console.error(err);
@@ -800,48 +858,85 @@ const AdminDashboard = ({ setAdminAuth }) => {
     }
   };
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (page = userPage, limit = userPerPage, search = userSearch, filter = userFilter) => {
+    setUsersLoading(true);
     try {
-      const res = await api.get('/admin/users', getHeaders());
+      const params = new URLSearchParams();
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      if (search && search.trim()) params.append('search', search.trim());
+      if (filter === 'unapproved') params.append('filter', 'unapproved');
+      const queryStr = params.toString() ? `?${params.toString()}` : '';
+      const res = await api.get(`/admin/users${queryStr}`, getHeaders());
       if (res.data.success === '1') {
-        setUsers(res.data.data);
+        setUsers(res.data.data || []);
+        setUserTotal(res.data.pagination?.total || (res.data.data || []).length);
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setUsersLoading(false);
     }
   };
 
-  const fetchReferrals = async () => {
+  const fetchReferrals = async (page = referralPage, limit = referralPerPage, search = referralSearch) => {
+    setReferralsLoading(true);
     try {
-      const res = await api.get('/admin/referrals', getHeaders());
+      const params = new URLSearchParams();
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      if (search && search.trim()) params.append('search', search.trim());
+      const queryStr = params.toString() ? `?${params.toString()}` : '';
+      const res = await api.get(`/admin/referrals${queryStr}`, getHeaders());
       if (res.data.success === '1') {
-        setReferrals(res.data.data);
+        setReferrals(res.data.data || []);
+        setReferralTotal(res.data.pagination?.total || (res.data.data || []).length);
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setReferralsLoading(false);
     }
   };
 
-  const fetchCommissions = async () => {
+  const fetchCommissions = async (fromDate = commissionFromDate, toDate = commissionToDate, page = commissionPage, limit = commissionPerPage) => {
+    setCommissionsLoading(true);
     try {
-      const res = await api.get(`/admin/commission/pending?from_date=${commissionFromDate}&to_date=${commissionToDate}`, getHeaders());
+      const params = new URLSearchParams();
+      if (fromDate) params.append('from_date', fromDate);
+      if (toDate) params.append('to_date', toDate);
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      const res = await api.get(`/admin/commission/pending?${params.toString()}`, getHeaders());
       if (res.data.success === '1') {
-        setCommissionList(res.data.data);
+        setCommissionList(res.data.data || []);
+        setCommissionTotal(res.data.pagination?.total || (res.data.data || []).length);
         setSelectedCommissionIds([]);
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setCommissionsLoading(false);
     }
   };
 
-  const fetchCommissionPayList = async () => {
+  const fetchCommissionPayList = async (fromDate = payListFromDate, toDate = payListToDate, page = payListPage, limit = payListPerPage) => {
+    setPayListLoading(true);
     try {
-      const res = await api.get(`/admin/commission/paid?from_date=${payListFromDate}&to_date=${payListToDate}`, getHeaders());
+      const params = new URLSearchParams();
+      if (fromDate) params.append('from_date', fromDate);
+      if (toDate) params.append('to_date', toDate);
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      const res = await api.get(`/admin/commission/paid?${params.toString()}`, getHeaders());
       if (res.data.success === '1') {
-        setCommissionPayList(res.data.data);
+        setCommissionPayList(res.data.data || []);
+        setPayListTotal(res.data.pagination?.total || (res.data.data || []).length);
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setPayListLoading(false);
     }
   };
 
@@ -1346,12 +1441,20 @@ const AdminDashboard = ({ setAdminAuth }) => {
   // ==========================================
   // REPORT MANAGEMENT FETCH FUNCTIONS
   // ==========================================
-  const fetchReportBidHistory = async () => {
+  const fetchReportBidHistory = async (date = bidHistoryDate, game = bidHistoryGame, type = bidHistoryType, page = bidHistoryPage, limit = bidHistoryPerPage, search = bidHistorySearch) => {
     setBidHistoryLoading(true);
     try {
-      const res = await api.get(`/admin/reports/bid-history?date=${bidHistoryDate}&game_name=${bidHistoryGame}&game_type=${bidHistoryType}`, getHeaders());
+      const params = new URLSearchParams();
+      if (date) params.append('date', date);
+      if (game && game !== 'all') params.append('game_name', game);
+      if (type && type !== 'all') params.append('game_type', type);
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      if (search && search.trim()) params.append('search', search.trim());
+      const res = await api.get(`/admin/reports/bid-history?${params.toString()}`, getHeaders());
       if (res.data.success === '1') {
         setBidHistoryList(res.data.data || []);
+        setBidHistoryTotalCount(res.data.pagination?.total || (res.data.data || []).length);
       }
     } catch (err) {
       console.error(err);
@@ -1401,14 +1504,22 @@ const AdminDashboard = ({ setAdminAuth }) => {
     }
   };
 
-  const fetchReportWinning = async () => {
+  const fetchReportWinning = async (date = winningDate, game = winningGame, session = winningSession, page = winningPage, limit = winningPerPage, search = winningSearch) => {
     setWinningLoading(true);
     try {
-      const res = await api.get(`/admin/reports/winning?date=${winningDate}&game_name=${winningGame}&market_status=${winningSession}`, getHeaders());
+      const params = new URLSearchParams();
+      if (date) params.append('date', date);
+      if (game && game !== 'all') params.append('game_name', game);
+      if (session && session !== 'all') params.append('market_status', session);
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      if (search && search.trim()) params.append('search', search.trim());
+      const res = await api.get(`/admin/reports/winning?${params.toString()}`, getHeaders());
       if (res.data.success === '1') {
         setWinningList(res.data.data || []);
         setWinningTotalAmt(res.data.total_winning || 0);
         setWinningTotalPoints(res.data.total_points || 0);
+        setWinningTotalCount(res.data.pagination?.total || (res.data.data || []).length);
       }
     } catch (err) {
       console.error(err);
@@ -1417,13 +1528,19 @@ const AdminDashboard = ({ setAdminAuth }) => {
     }
   };
 
-  const fetchReportTransfer = async () => {
+  const fetchReportTransfer = async (date = transferDate, page = transferPage, limit = transferPerPage, search = transferSearch) => {
     setTransferLoading(true);
     try {
-      const res = await api.get(`/admin/reports/transfers?date=${transferDate}`, getHeaders());
+      const params = new URLSearchParams();
+      if (date) params.append('date', date);
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      if (search && search.trim()) params.append('search', search.trim());
+      const res = await api.get(`/admin/reports/transfers?${params.toString()}`, getHeaders());
       if (res.data.success === '1') {
         setTransferList(res.data.data || []);
         setTransferTotal(res.data.total_amount || 0);
+        setTransferTotalCount(res.data.pagination?.total || (res.data.data || []).length);
       }
     } catch (err) {
       console.error(err);
@@ -1465,13 +1582,19 @@ const AdminDashboard = ({ setAdminAuth }) => {
     }
   };
 
-  const fetchReportWithdraw = async () => {
+  const fetchReportWithdraw = async (date = withdrawRepDate, page = withdrawRepPage, limit = withdrawRepPerPage, search = withdrawRepSearch) => {
     setWithdrawRepLoading(true);
     try {
-      const res = await api.get(`/admin/reports/withdrawals?date=${withdrawRepDate}`, getHeaders());
+      const params = new URLSearchParams();
+      if (date) params.append('date', date);
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      if (search && search.trim()) params.append('search', search.trim());
+      const res = await api.get(`/admin/reports/withdrawals?${params.toString()}`, getHeaders());
       if (res.data.success === '1') {
         setWithdrawRepList(res.data.data || []);
         setWithdrawRepTotal(res.data.total_amount || 0);
+        setWithdrawRepTotalCount(res.data.pagination?.total || (res.data.data || []).length);
       }
     } catch (err) {
       console.error(err);
@@ -1480,13 +1603,19 @@ const AdminDashboard = ({ setAdminAuth }) => {
     }
   };
 
-  const fetchReportAutoDeposit = async () => {
+  const fetchReportAutoDeposit = async (date = autoDepDate, page = autoDepPage, limit = autoDepPerPage, search = autoDepSearch) => {
     setAutoDepLoading(true);
     try {
-      const res = await api.get(`/admin/auto-deposits?date=${autoDepDate}`, getHeaders());
+      const params = new URLSearchParams();
+      if (date && date !== 'all' && date.trim()) params.append('date', date.trim());
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      if (search && search.trim()) params.append('search', search.trim());
+      const res = await api.get(`/admin/auto-deposits?${params.toString()}`, getHeaders());
       if (res.data.success === '1') {
         setAutoDepList(res.data.data || []);
         setAutoDepTotals(res.data.totals || { total_transfer: 0, total_approved: 0, total_rejected: 0, total_pending: 0 });
+        setAutoDepTotalCount(res.data.pagination?.total || (res.data.data || []).length);
       }
     } catch (err) {
       console.error(err);
@@ -1498,13 +1627,19 @@ const AdminDashboard = ({ setAdminAuth }) => {
   // ==========================================
   // WALLET MANAGEMENT & ADD FUND REPORT FUNCTIONS
   // ==========================================
-  const fetchFundRequests = async () => {
+  const fetchFundRequests = async (date = fundReqDate, page = fundReqPage, limit = fundReqPerPage, search = fundReqSearch) => {
     setFundReqLoading(true);
     try {
-      const res = await api.get(`/admin/deposits/requests?date=${fundReqDate}`, getHeaders());
+      const params = new URLSearchParams();
+      if (date && date !== 'all' && date.trim()) params.append('date', date.trim());
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      if (search && search.trim()) params.append('search', search.trim());
+      const res = await api.get(`/admin/deposits/requests?${params.toString()}`, getHeaders());
       if (res.data.success === '1') {
         setFundReqList(res.data.data || []);
         setFundReqTotal(res.data.total_amount || 0);
+        setFundReqTotalCount(res.data.pagination?.total || (res.data.data || []).length);
       }
     } catch (err) {
       console.error(err);
@@ -1536,13 +1671,20 @@ const AdminDashboard = ({ setAdminAuth }) => {
     }
   };
 
-  const fetchWithRequests = async () => {
+  const fetchWithRequests = async (date = withReqDate, page = withReqPage, limit = withReqPerPage, search = withReqSearch, status = withReqStatus) => {
     setWithReqLoading(true);
     try {
-      const res = await api.get(`/admin/withdrawals/requests?date=${withReqDate}`, getHeaders());
+      const params = new URLSearchParams();
+      if (date && date !== 'all' && date.trim()) params.append('date', date.trim());
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      if (search && search.trim()) params.append('search', search.trim());
+      if (status && status !== 'all') params.append('status', status);
+      const res = await api.get(`/admin/withdrawals/requests?${params.toString()}`, getHeaders());
       if (res.data.success === '1') {
         setWithReqList(res.data.data || []);
         setWithReqTotals(res.data.totals || { total_amount: 0, total_approved: 0, total_rejected: 0, total_pending: 0 });
+        setWithReqTotalCount(res.data.pagination?.total || (res.data.data || []).length);
       }
     } catch (err) {
       console.error(err);
@@ -1647,12 +1789,18 @@ const AdminDashboard = ({ setAdminAuth }) => {
     }
   };
 
-  const fetchAddFundReport = async () => {
+  const fetchAddFundReport = async (date = addFundRepDate, page = addFundRepPage, limit = addFundRepPerPage, search = addFundRepSearch) => {
     setAddFundRepLoading(true);
     try {
-      const res = await api.get(`/admin/reports/add-fund?date=${addFundRepDate}`, getHeaders());
+      const params = new URLSearchParams();
+      if (date && date !== 'all' && date.trim()) params.append('date', date.trim());
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      if (search && search.trim()) params.append('search', search.trim());
+      const res = await api.get(`/admin/reports/add-fund?${params.toString()}`, getHeaders());
       if (res.data.success === '1') {
         setAddFundRepList(res.data.data || []);
+        setAddFundRepTotalCount(res.data.pagination?.total || (res.data.data || []).length);
       }
     } catch (err) {
       console.error(err);
@@ -2127,29 +2275,6 @@ const AdminDashboard = ({ setAdminAuth }) => {
     cursor: 'default',
     outline: 'none'
   };
-
-  // Filtered lists
-  const filteredUsers = users.filter(u => {
-    if (userFilter === 'unapproved' && u.status !== '0') return false;
-    if (!userSearch) return true;
-    const term = userSearch.toLowerCase();
-    return (
-      (u.name && u.name.toLowerCase().includes(term)) ||
-      (u.phone && u.phone.includes(term)) ||
-      (u.email && u.email.toLowerCase().includes(term))
-    );
-  });
-
-  const filteredReferrals = referrals.filter(r => {
-    if (!referralSearch) return true;
-    const term = referralSearch.toLowerCase();
-    return (
-      (r.name && r.name.toLowerCase().includes(term)) ||
-      (r.phone && r.phone.includes(term)) ||
-      (r.referred_by_phone && r.referred_by_phone.includes(term)) ||
-      (r.referrer_name && r.referrer_name.toLowerCase().includes(term))
-    );
-  });
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f4f5f8', color: '#495057', fontFamily: "'Outfit', 'Inter', -apple-system, sans-serif", position: 'relative', overflowX: 'hidden' }}>
@@ -4003,25 +4128,11 @@ const AdminDashboard = ({ setAdminAuth }) => {
 
               {/* Grid Row 3: Fund Request Auto Deposit History Table */}
               {(() => {
-                const filteredAutoDeposits = autoDeposits.filter(d => !autoDepositSearch || 
-                  (d.username && d.username.toLowerCase().includes(autoDepositSearch.toLowerCase())) ||
-                  (d.user_name && d.user_name.toLowerCase().includes(autoDepositSearch.toLowerCase())) ||
-                  (d.txt_request && d.txt_request.toLowerCase().includes(autoDepositSearch.toLowerCase())) ||
-                  (d.txt_id && String(d.txt_id).toLowerCase().includes(autoDepositSearch.toLowerCase())) ||
-                  (d.amount && String(d.amount).includes(autoDepositSearch))
-                );
-
-                const totalItems = filteredAutoDeposits.length;
-                const totalPages = Math.max(1, Math.ceil(totalItems / autoDepositPerPage));
-                const safePage = Math.min(Math.max(1, autoDepositPage), totalPages);
-                const startIndex = (safePage - 1) * autoDepositPerPage;
-                const endIndex = Math.min(startIndex + autoDepositPerPage, totalItems);
-                const currentItems = filteredAutoDeposits.slice(startIndex, endIndex);
-
-                const totalAmount = filteredAutoDeposits.reduce((acc, d) => acc + (parseFloat(d.amount) || 0), 0);
-                const approvedCount = filteredAutoDeposits.filter(d => d.status === '1' || d.status === 1).length;
-                const pendingCount = filteredAutoDeposits.filter(d => d.status === '0' || d.status === 0).length;
-                const declinedCount = filteredAutoDeposits.filter(d => d.status === '-1' || d.status === -1).length;
+                const totalItems = autoDepositTotalCount;
+                const totalAmount = autoDepositTotals.total_transfer || 0;
+                const approvedCount = autoDepositTotals.total_approved || 0;
+                const pendingCount = autoDepositTotals.total_pending || 0;
+                const declinedCount = autoDepositTotals.total_rejected || 0;
 
                 return (
                   <div style={{
@@ -4065,11 +4176,11 @@ const AdminDashboard = ({ setAdminAuth }) => {
                           </span>
                         )}
                         <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700' }}>
-                          ✓ {approvedCount} Accepted
+                          ✓ ₹ {approvedCount.toLocaleString('en-IN')} Accepted
                         </span>
                         {declinedCount > 0 && (
                           <span style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700' }}>
-                            ✕ {declinedCount} Rejected
+                            ✕ ₹ {declinedCount.toLocaleString('en-IN')} Rejected
                           </span>
                         )}
                       </div>
@@ -4101,7 +4212,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                             const newDate = e.target.value;
                             setAutoDepositDate(newDate);
                             setAutoDepositPage(1);
-                            fetchAutoDeposits(newDate);
+                            fetchAutoDeposits(newDate, 1, autoDepositPerPage, autoDepositSearch);
                           }}
                           style={{
                             padding: '6px 10px',
@@ -4120,7 +4231,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                             const today = getISTTodayStr();
                             setAutoDepositDate(today);
                             setAutoDepositPage(1);
-                            fetchAutoDeposits(today);
+                            fetchAutoDeposits(today, 1, autoDepositPerPage, autoDepositSearch);
                           }}
                           style={{
                             padding: '6px 12px',
@@ -4142,7 +4253,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                           onClick={() => {
                             setAutoDepositDate('');
                             setAutoDepositPage(1);
-                            fetchAutoDeposits('');
+                            fetchAutoDeposits('', 1, autoDepositPerPage, autoDepositSearch);
                           }}
                           style={{
                             padding: '6px 12px',
@@ -4168,8 +4279,10 @@ const AdminDashboard = ({ setAdminAuth }) => {
                           <select
                             value={autoDepositPerPage}
                             onChange={(e) => {
-                              setAutoDepositPerPage(Number(e.target.value));
+                              const sz = Number(e.target.value);
+                              setAutoDepositPerPage(sz);
                               setAutoDepositPage(1);
+                              fetchAutoDeposits(autoDepositDate, 1, sz, autoDepositSearch);
                             }}
                             style={{
                               padding: '6px 8px',
@@ -4197,9 +4310,12 @@ const AdminDashboard = ({ setAdminAuth }) => {
                             type="text"
                             placeholder="Search UTR, User, Req..."
                             value={autoDepositSearch}
-                            onChange={(e) => {
-                              setAutoDepositSearch(e.target.value);
-                              setAutoDepositPage(1);
+                            onChange={(e) => setAutoDepositSearch(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                setAutoDepositPage(1);
+                                fetchAutoDeposits(autoDepositDate, 1, autoDepositPerPage, e.target.value);
+                              }
                             }}
                             style={{
                               width: '100%',
@@ -4213,7 +4329,11 @@ const AdminDashboard = ({ setAdminAuth }) => {
                           />
                           {autoDepositSearch && (
                             <button
-                              onClick={() => { setAutoDepositSearch(''); setAutoDepositPage(1); }}
+                              onClick={() => {
+                                setAutoDepositSearch('');
+                                setAutoDepositPage(1);
+                                fetchAutoDeposits(autoDepositDate, 1, autoDepositPerPage, '');
+                              }}
                               style={{
                                 position: 'absolute',
                                 right: '8px',
@@ -4232,7 +4352,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                         </div>
 
                         <button
-                          onClick={() => fetchAutoDeposits(autoDepositDate)}
+                          onClick={() => fetchAutoDeposits(autoDepositDate, autoDepositPage, autoDepositPerPage, autoDepositSearch)}
                           disabled={autoDepositsLoading}
                           title="Refresh Deposits"
                           style={{
@@ -4277,11 +4397,11 @@ const AdminDashboard = ({ setAdminAuth }) => {
                                 </div>
                               </td>
                             </tr>
-                          ) : currentItems.length > 0 ? (
-                            currentItems.map((dep, idx) => (
+                          ) : autoDeposits.length > 0 ? (
+                            autoDeposits.map((dep, idx) => (
                               <tr key={dep.id} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
                                 <td style={{ padding: '12px 14px', color: '#64748b', fontWeight: '600' }}>
-                                  {startIndex + idx + 1}
+                                  {(autoDepositPage - 1) * autoDepositPerPage + idx + 1}
                                 </td>
                                 <td style={{ padding: '12px 14px', fontWeight: '700', color: '#1e293b' }}>
                                   {dep.user_name || dep.username || 'N/A'}
@@ -4378,7 +4498,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                                       onClick={() => {
                                         setAutoDepositDate('');
                                         setAutoDepositPage(1);
-                                        fetchAutoDeposits('');
+                                        fetchAutoDeposits('', 1, autoDepositPerPage, autoDepositSearch);
                                       }}
                                       style={{
                                         backgroundColor: '#f1f5f9',
@@ -4404,96 +4524,21 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     </div>
 
                     {/* Pagination Bar */}
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: isMobile ? 'column' : 'row',
-                      justifyContent: 'space-between',
-                      alignItems: isMobile ? 'center' : 'center',
-                      gap: '12px',
-                      marginTop: '16px',
-                      paddingTop: '12px',
-                      borderTop: '1px solid #f1f5f9'
-                    }}>
-                      <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
-                        Showing <strong style={{ color: '#1e293b' }}>{totalItems === 0 ? 0 : startIndex + 1}</strong> to <strong style={{ color: '#1e293b' }}>{endIndex}</strong> of <strong style={{ color: '#1e293b' }}>{totalItems}</strong> entries
-                      </div>
-
-                      {totalPages > 1 && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <button
-                            onClick={() => setAutoDepositPage(prev => Math.max(1, prev - 1))}
-                            disabled={safePage <= 1}
-                            style={{
-                              padding: '6px 10px',
-                              borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              backgroundColor: safePage <= 1 ? '#f8fafc' : '#ffffff',
-                              color: safePage <= 1 ? '#94a3b8' : '#334155',
-                              cursor: safePage <= 1 ? 'not-allowed' : 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              fontSize: '0.78rem',
-                              fontWeight: '600'
-                            }}
-                          >
-                            <ChevronLeft size={14} /> Prev
-                          </button>
-
-                          {Array.from({ length: totalPages }, (_, i) => i + 1)
-                            .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
-                            .map((p, idx, arr) => {
-                              const prevPage = arr[idx - 1];
-                              const showDots = prevPage && p - prevPage > 1;
-                              return (
-                                <React.Fragment key={p}>
-                                  {showDots && (
-                                    <span style={{ padding: '0 4px', color: '#94a3b8', fontSize: '0.8rem' }}>…</span>
-                                  )}
-                                  <button
-                                    onClick={() => setAutoDepositPage(p)}
-                                    style={{
-                                      minWidth: '32px',
-                                      height: '32px',
-                                      padding: '0 8px',
-                                      borderRadius: '6px',
-                                      border: p === safePage ? 'none' : '1px solid #cbd5e1',
-                                      backgroundColor: p === safePage ? '#4338ca' : '#ffffff',
-                                      color: p === safePage ? '#ffffff' : '#334155',
-                                      fontSize: '0.78rem',
-                                      fontWeight: p === safePage ? '700' : '600',
-                                      cursor: 'pointer',
-                                      boxShadow: p === safePage ? '0 2px 6px rgba(67, 56, 202, 0.3)' : 'none'
-                                    }}
-                                  >
-                                    {p}
-                                  </button>
-                                </React.Fragment>
-                              );
-                            })}
-
-                          <button
-                            onClick={() => setAutoDepositPage(prev => Math.min(totalPages, prev + 1))}
-                            disabled={safePage >= totalPages}
-                            style={{
-                              padding: '6px 10px',
-                              borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              backgroundColor: safePage >= totalPages ? '#f8fafc' : '#ffffff',
-                              color: safePage >= totalPages ? '#94a3b8' : '#334155',
-                              cursor: safePage >= totalPages ? 'not-allowed' : 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              fontSize: '0.78rem',
-                              fontWeight: '600'
-                            }}
-                          >
-                            Next <ChevronRight size={14} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    <PaginationBar
+                      currentPage={autoDepositPage}
+                      pageSize={autoDepositPerPage}
+                      totalItems={autoDepositTotalCount}
+                      onPageChange={(p) => {
+                        setAutoDepositPage(p);
+                        fetchAutoDeposits(autoDepositDate, p, autoDepositPerPage, autoDepositSearch);
+                      }}
+                      onPageSizeChange={(sz) => {
+                        setAutoDepositPerPage(sz);
+                        setAutoDepositPage(1);
+                        fetchAutoDeposits(autoDepositDate, 1, sz, autoDepositSearch);
+                      }}
+                      itemName="auto deposits"
+                    />
                   </div>
                 );
               })()}
@@ -4517,16 +4562,67 @@ const AdminDashboard = ({ setAdminAuth }) => {
               {/* Table Card */}
               <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px', border: '1px solid #eff2f7', boxShadow: '0 0.75rem 1.5rem rgba(18,38,63,.03)' }}>
                 {/* Top Actions */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-                  <input
-                    type="text"
-                    placeholder="Search users (name, phone, email)..."
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                    style={{ width: '320px', padding: '8px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.85rem' }}
-                  />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setUserPage(1);
+                      fetchUsers(1, userPerPage, userSearch, userFilter);
+                    }}
+                    style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}
+                  >
+                    <input
+                      type="text"
+                      placeholder="Search users (name, phone, email)..."
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      style={{ width: '280px', padding: '8px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.85rem' }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={usersLoading}
+                      style={{
+                        backgroundColor: '#556ee6',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '8px 16px',
+                        fontSize: '0.85rem',
+                        fontWeight: '600',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {usersLoading ? 'Searching...' : 'Search'}
+                    </button>
+                    {userSearch && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserSearch('');
+                          setUserPage(1);
+                          fetchUsers(1, userPerPage, '', userFilter);
+                        }}
+                        style={{
+                          backgroundColor: '#6c757d',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '8px 12px',
+                          fontSize: '0.85rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </form>
                   <button
-                    onClick={() => setUserFilter(userFilter === 'all' ? 'unapproved' : 'all')}
+                    onClick={() => {
+                      const nextFilter = userFilter === 'all' ? 'unapproved' : 'all';
+                      setUserFilter(nextFilter);
+                      setUserPage(1);
+                      fetchUsers(1, userPerPage, userSearch, nextFilter);
+                    }}
                     style={{
                       backgroundColor: '#f1673e',
                       color: '#ffffff',
@@ -4561,9 +4657,9 @@ const AdminDashboard = ({ setAdminAuth }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredUsers.map((u, idx) => (
+                      {users.map((u, idx) => (
                         <tr key={u.id} style={{ borderBottom: '1px solid #eff2f7' }}>
-                          <td style={{ padding: '12px' }}>{idx + 1}</td>
+                          <td style={{ padding: '12px' }}>{(userPage - 1) * userPerPage + idx + 1}</td>
                           <td style={{ padding: '12px', color: '#f1673e', fontWeight: '500' }}>{u.name || 'User'}</td>
                           <td style={{ padding: '12px' }}>{u.phone}</td>
                           <td style={{ padding: '12px' }}>{u.email || '-'}</td>
@@ -4645,16 +4741,40 @@ const AdminDashboard = ({ setAdminAuth }) => {
                           </td>
                         </tr>
                       ))}
-                      {filteredUsers.length === 0 && (
+                      {users.length === 0 && !usersLoading && (
                         <tr>
                           <td colSpan="11" style={{ padding: '24px', textAlign: 'center', color: '#74788d' }}>
                             No users found.
                           </td>
                         </tr>
                       )}
+                      {usersLoading && (
+                        <tr>
+                          <td colSpan="11" style={{ padding: '24px', textAlign: 'center', color: '#556ee6' }}>
+                            Loading users...
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
+
+                {/* Server-Side Pagination Bar */}
+                <PaginationBar
+                  currentPage={userPage}
+                  pageSize={userPerPage}
+                  totalItems={userTotal}
+                  onPageChange={(p) => {
+                    setUserPage(p);
+                    fetchUsers(p, userPerPage, userSearch, userFilter);
+                  }}
+                  onPageSizeChange={(sz) => {
+                    setUserPerPage(sz);
+                    setUserPage(1);
+                    fetchUsers(1, sz, userSearch, userFilter);
+                  }}
+                  itemName="users"
+                />
               </div>
             </div>
           )}
@@ -5720,15 +5840,63 @@ const AdminDashboard = ({ setAdminAuth }) => {
 
               {/* Card Container */}
               <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px', border: '1px solid #eff2f7' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-                  <span style={{ fontSize: '0.9rem', color: '#74788d' }}>Referrals List</span>
-                  <input
-                    type="text"
-                    placeholder="Search..."
-                    value={referralSearch}
-                    onChange={(e) => setReferralSearch(e.target.value)}
-                    style={{ width: '250px', padding: '8px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.85rem' }}
-                  />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
+                  <span style={{ fontSize: '0.9rem', color: '#74788d', fontWeight: '600' }}>Referrals List ({referralTotal})</span>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      placeholder="Search referrer, user, phone..."
+                      value={referralSearch}
+                      onChange={(e) => setReferralSearch(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          setReferralPage(1);
+                          fetchReferrals(1, referralPerPage, e.target.value);
+                        }
+                      }}
+                      style={{ width: '260px', padding: '8px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.85rem', outline: 'none' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReferralPage(1);
+                        fetchReferrals(1, referralPerPage, referralSearch);
+                      }}
+                      style={{
+                        backgroundColor: '#556ee6',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '8px 16px',
+                        fontSize: '0.85rem',
+                        fontWeight: '600',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Search
+                    </button>
+                    {referralSearch && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReferralSearch('');
+                          setReferralPage(1);
+                          fetchReferrals(1, referralPerPage, '');
+                        }}
+                        style={{
+                          backgroundColor: '#eff2f7',
+                          color: '#495057',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '8px 12px',
+                          fontSize: '0.85rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div style={{ overflowX: 'auto' }}>
@@ -5745,37 +5913,44 @@ const AdminDashboard = ({ setAdminAuth }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredReferrals.map((row, idx) => (
-                        <tr key={row.id} style={{ borderBottom: '1px solid #eff2f7' }}>
-                          <td style={{ padding: '12px' }}>{idx + 1}</td>
-                          <td style={{ padding: '12px' }}>{row.name}</td>
-                          <td style={{ padding: '12px' }}>{row.phone}</td>
-                          <td style={{ padding: '12px' }}>{row.referred_by_phone}</td>
-                          <td style={{ padding: '12px' }}>{row.referrer_name || '—'}</td>
-                          <td style={{ padding: '12px' }}>{row.date}</td>
-                          <td style={{ padding: '12px', textAlign: 'center' }}>
-                            <button
-                              onClick={() => {
-                                const found = users.find(u => u.phone === row.phone);
-                                if (found) setSelectedUserModal(found);
-                              }}
-                              style={{
-                                backgroundColor: '#f1673e',
-                                color: '#ffffff',
-                                border: 'none',
-                                borderRadius: '4px',
-                                padding: '4px 12px',
-                                fontSize: '0.78rem',
-                                fontWeight: '600',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              View
-                            </button>
+                      {referralsLoading ? (
+                        <tr>
+                          <td colSpan="7" style={{ padding: '24px', textAlign: 'center', color: '#556ee6' }}>
+                            Loading referrals...
                           </td>
                         </tr>
-                      ))}
-                      {filteredReferrals.length === 0 && (
+                      ) : referrals.length > 0 ? (
+                        referrals.map((row, idx) => (
+                          <tr key={row.id || idx} style={{ borderBottom: '1px solid #eff2f7' }}>
+                            <td style={{ padding: '12px' }}>{(referralPage - 1) * referralPerPage + idx + 1}</td>
+                            <td style={{ padding: '12px', fontWeight: '600' }}>{row.name}</td>
+                            <td style={{ padding: '12px' }}>{row.phone}</td>
+                            <td style={{ padding: '12px' }}>{row.referred_by_phone}</td>
+                            <td style={{ padding: '12px', color: '#556ee6', fontWeight: '500' }}>{row.referrer_name || '—'}</td>
+                            <td style={{ padding: '12px' }}>{row.date}</td>
+                            <td style={{ padding: '12px', textAlign: 'center' }}>
+                              <button
+                                onClick={() => {
+                                  const found = users.find(u => u.phone === row.phone);
+                                  if (found) setSelectedUserModal(found);
+                                }}
+                                style={{
+                                  backgroundColor: '#f1673e',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '4px 12px',
+                                  fontSize: '0.78rem',
+                                  fontWeight: '600',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                View
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
                         <tr>
                           <td colSpan="7" style={{ padding: '24px', textAlign: 'center', color: '#74788d' }}>
                             No referral data found.
@@ -5785,6 +5960,22 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     </tbody>
                   </table>
                 </div>
+
+                <PaginationBar
+                  currentPage={referralPage}
+                  pageSize={referralPerPage}
+                  totalItems={referralTotal}
+                  onPageChange={(p) => {
+                    setReferralPage(p);
+                    fetchReferrals(p, referralPerPage, referralSearch);
+                  }}
+                  onPageSizeChange={(sz) => {
+                    setReferralPerPage(sz);
+                    setReferralPage(1);
+                    fetchReferrals(1, sz, referralSearch);
+                  }}
+                  itemName="referrals"
+                />
               </div>
             </div>
           )}
@@ -5829,7 +6020,10 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     />
                   </div>
                   <button
-                    onClick={fetchCommissions}
+                    onClick={() => {
+                      setCommissionPage(1);
+                      fetchCommissions(commissionFromDate, commissionToDate, 1, commissionPerPage);
+                    }}
                     style={{
                       backgroundColor: '#f1673e',
                       color: '#ffffff',
@@ -5892,48 +6086,55 @@ const AdminDashboard = ({ setAdminAuth }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {commissionList.map((comm, idx) => (
-                        <tr key={comm.id} style={{ borderBottom: '1px solid #eff2f7' }}>
-                          <td style={{ padding: '12px' }}>
-                            <input
-                              type="checkbox"
-                              checked={selectedCommissionIds.includes(comm.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedCommissionIds(prev => [...prev, comm.id]);
-                                } else {
-                                  setSelectedCommissionIds(prev => prev.filter(id => id !== comm.id));
-                                }
-                              }}
-                            />
-                          </td>
-                          <td style={{ padding: '12px' }}>{idx + 1}</td>
-                          <td style={{ padding: '12px' }}>{comm.referrer_name || '-'}</td>
-                          <td style={{ padding: '12px' }}>{comm.referrer_phone}</td>
-                          <td style={{ padding: '12px' }}>{comm.referred_user_phone}</td>
-                          <td style={{ padding: '12px', fontWeight: '600' }}>₹{comm.amount}</td>
-                          <td style={{ padding: '12px' }}>{comm.game_name} ({comm.bid_date})</td>
-                          <td style={{ padding: '12px' }}>{comm.created_at}</td>
-                          <td style={{ padding: '12px', textAlign: 'center' }}>
-                            <button
-                              onClick={() => handleCommissionApprove([comm.id])}
-                              style={{
-                                backgroundColor: '#51bb25',
-                                color: '#ffffff',
-                                border: 'none',
-                                borderRadius: '4px',
-                                padding: '4px 10px',
-                                fontSize: '0.78rem',
-                                fontWeight: '600',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              Approve
-                            </button>
+                      {commissionsLoading ? (
+                        <tr>
+                          <td colSpan="9" style={{ padding: '24px', textAlign: 'center', color: '#556ee6' }}>
+                            Loading commissions...
                           </td>
                         </tr>
-                      ))}
-                      {commissionList.length === 0 && (
+                      ) : commissionList.length > 0 ? (
+                        commissionList.map((comm, idx) => (
+                          <tr key={comm.id} style={{ borderBottom: '1px solid #eff2f7' }}>
+                            <td style={{ padding: '12px' }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedCommissionIds.includes(comm.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedCommissionIds(prev => [...prev, comm.id]);
+                                  } else {
+                                    setSelectedCommissionIds(prev => prev.filter(id => id !== comm.id));
+                                  }
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '12px' }}>{(commissionPage - 1) * commissionPerPage + idx + 1}</td>
+                            <td style={{ padding: '12px', fontWeight: '600' }}>{comm.referrer_name || '-'}</td>
+                            <td style={{ padding: '12px' }}>{comm.referrer_phone}</td>
+                            <td style={{ padding: '12px' }}>{comm.referred_user_phone}</td>
+                            <td style={{ padding: '12px', fontWeight: '600', color: '#28a745' }}>₹{comm.amount}</td>
+                            <td style={{ padding: '12px' }}>{comm.game_name} ({comm.bid_date})</td>
+                            <td style={{ padding: '12px' }}>{comm.created_at}</td>
+                            <td style={{ padding: '12px', textAlign: 'center' }}>
+                              <button
+                                onClick={() => handleCommissionApprove([comm.id])}
+                                style={{
+                                  backgroundColor: '#51bb25',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '4px 10px',
+                                  fontSize: '0.78rem',
+                                  fontWeight: '600',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Approve
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
                         <tr>
                           <td colSpan="9" style={{ padding: '24px', textAlign: 'center', color: '#74788d' }}>
                             No pending commission in this date range.
@@ -5944,6 +6145,21 @@ const AdminDashboard = ({ setAdminAuth }) => {
                   </table>
                 </div>
 
+                <PaginationBar
+                  currentPage={commissionPage}
+                  pageSize={commissionPerPage}
+                  totalItems={commissionTotal}
+                  onPageChange={(p) => {
+                    setCommissionPage(p);
+                    fetchCommissions(commissionFromDate, commissionToDate, p, commissionPerPage);
+                  }}
+                  onPageSizeChange={(sz) => {
+                    setCommissionPerPage(sz);
+                    setCommissionPage(1);
+                    fetchCommissions(commissionFromDate, commissionToDate, 1, sz);
+                  }}
+                  itemName="commissions"
+                />
               </div>
 
             </div>
@@ -5989,7 +6205,10 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     />
                   </div>
                   <button
-                    onClick={fetchCommissionPayList}
+                    onClick={() => {
+                      setPayListPage(1);
+                      fetchCommissionPayList(payListFromDate, payListToDate, 1, payListPerPage);
+                    }}
                     style={{
                       backgroundColor: '#f1673e',
                       color: '#ffffff',
@@ -6020,18 +6239,25 @@ const AdminDashboard = ({ setAdminAuth }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {commissionPayList.map((comm, idx) => (
-                        <tr key={comm.id} style={{ borderBottom: '1px solid #eff2f7' }}>
-                          <td style={{ padding: '12px' }}>{idx + 1}</td>
-                          <td style={{ padding: '12px' }}>{comm.referrer_name || '-'}</td>
-                          <td style={{ padding: '12px' }}>{comm.referrer_phone}</td>
-                          <td style={{ padding: '12px' }}>{comm.referred_user_phone}</td>
-                          <td style={{ padding: '12px', fontWeight: 'bold', color: '#2BC155' }}>₹{comm.amount}</td>
-                          <td style={{ padding: '12px' }}>{comm.game_name} ({comm.bid_date})</td>
-                          <td style={{ padding: '12px' }}>{comm.created_at}</td>
+                      {payListLoading ? (
+                        <tr>
+                          <td colSpan="7" style={{ padding: '24px', textAlign: 'center', color: '#556ee6' }}>
+                            Loading paid commissions...
+                          </td>
                         </tr>
-                      ))}
-                      {commissionPayList.length === 0 && (
+                      ) : commissionPayList.length > 0 ? (
+                        commissionPayList.map((comm, idx) => (
+                          <tr key={comm.id} style={{ borderBottom: '1px solid #eff2f7' }}>
+                            <td style={{ padding: '12px' }}>{(payListPage - 1) * payListPerPage + idx + 1}</td>
+                            <td style={{ padding: '12px', fontWeight: '600' }}>{comm.referrer_name || '-'}</td>
+                            <td style={{ padding: '12px' }}>{comm.referrer_phone}</td>
+                            <td style={{ padding: '12px' }}>{comm.referred_user_phone}</td>
+                            <td style={{ padding: '12px', fontWeight: 'bold', color: '#2BC155' }}>₹{comm.amount}</td>
+                            <td style={{ padding: '12px' }}>{comm.game_name} ({comm.bid_date})</td>
+                            <td style={{ padding: '12px' }}>{comm.created_at}</td>
+                          </tr>
+                        ))
+                      ) : (
                         <tr>
                           <td colSpan="7" style={{ padding: '24px', textAlign: 'center', color: '#74788d' }}>
                             No paid commission in this date range.
@@ -6042,6 +6268,21 @@ const AdminDashboard = ({ setAdminAuth }) => {
                   </table>
                 </div>
 
+                <PaginationBar
+                  currentPage={payListPage}
+                  pageSize={payListPerPage}
+                  totalItems={payListTotal}
+                  onPageChange={(p) => {
+                    setPayListPage(p);
+                    fetchCommissionPayList(payListFromDate, payListToDate, p, payListPerPage);
+                  }}
+                  onPageSizeChange={(sz) => {
+                    setPayListPerPage(sz);
+                    setPayListPage(1);
+                    fetchCommissionPayList(payListFromDate, payListToDate, 1, sz);
+                  }}
+                  itemName="paid commissions"
+                />
               </div>
 
             </div>
@@ -7492,13 +7733,20 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     />
                   </div>
                   <button
-                    onClick={fetchFundRequests}
+                    onClick={() => {
+                      setFundReqPage(1);
+                      fetchFundRequests(fundReqDate, 1, fundReqPerPage, fundReqSearch);
+                    }}
                     style={{ backgroundColor: '#34c38f', color: '#fff', border: 'none', padding: '9px 22px', borderRadius: '4px', fontSize: '0.88rem', fontWeight: '600', cursor: 'pointer' }}
                   >
                     Filter Date
                   </button>
                   <button
-                    onClick={() => { setFundReqDate(''); fetchFundRequests(); }}
+                    onClick={() => {
+                      setFundReqDate('');
+                      setFundReqPage(1);
+                      fetchFundRequests('', 1, fundReqPerPage, fundReqSearch);
+                    }}
                     style={{ backgroundColor: '#6c757d', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: '4px', fontSize: '0.88rem', fontWeight: '600', cursor: 'pointer' }}
                   >
                     Show All
@@ -7515,7 +7763,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                   </span>
                 )}
                 columns={[
-                  { title: 'S.No.', key: 'id', render: (_, idx) => idx + 1 },
+                  { title: 'S.No.', key: 'id', render: (_, idx) => (fundReqPage - 1) * fundReqPerPage + idx + 1 },
                   {
                     title: 'User Name',
                     key: 'username',
@@ -7624,6 +7872,24 @@ const AdminDashboard = ({ setAdminAuth }) => {
                 ]}
                 data={fundReqList}
                 loading={fundReqLoading}
+                serverSide={true}
+                totalItems={fundReqTotalCount}
+                currentPage={fundReqPage}
+                pageSize={fundReqPerPage}
+                onPageChange={(p) => {
+                  setFundReqPage(p);
+                  fetchFundRequests(fundReqDate, p, fundReqPerPage, fundReqSearch);
+                }}
+                onPageSizeChange={(sz) => {
+                  setFundReqPerPage(sz);
+                  setFundReqPage(1);
+                  fetchFundRequests(fundReqDate, 1, sz, fundReqSearch);
+                }}
+                onSearchChange={(s) => {
+                  setFundReqSearch(s);
+                  setFundReqPage(1);
+                  fetchFundRequests(fundReqDate, 1, fundReqPerPage, s);
+                }}
                 searchPlaceholder="Search by Name, Phone, Amount..."
               />
             </div>
@@ -7643,8 +7909,15 @@ const AdminDashboard = ({ setAdminAuth }) => {
 
               {/* Date Filter Card */}
               <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '20px', border: '1px solid #eff2f7', marginBottom: '20px' }}>
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: '220px', maxWidth: '320px' }}>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setWithReqPage(1);
+                    fetchWithRequests(withReqDate, 1, withReqPerPage, withReqSearch, withReqStatus);
+                  }}
+                  style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}
+                >
+                  <div style={{ flex: 1, minWidth: '180px', maxWidth: '240px' }}>
                     <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Date</label>
                     <input
                       type="date"
@@ -7653,13 +7926,50 @@ const AdminDashboard = ({ setAdminAuth }) => {
                       style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem' }}
                     />
                   </div>
+                  <div style={{ flex: 1, minWidth: '220px', maxWidth: '300px' }}>
+                    <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Search User / Phone / Remark</label>
+                    <input
+                      type="text"
+                      placeholder="Search..."
+                      value={withReqSearch}
+                      onChange={(e) => setWithReqSearch(e.target.value)}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem' }}
+                    />
+                  </div>
+                  <div style={{ width: '160px' }}>
+                    <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Status</label>
+                    <select
+                      value={withReqStatus}
+                      onChange={(e) => setWithReqStatus(e.target.value)}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem' }}
+                    >
+                      <option value="all">All Status</option>
+                      <option value="0">Pending</option>
+                      <option value="1">Approved</option>
+                      <option value="-1">Rejected</option>
+                    </select>
+                  </div>
                   <button
-                    onClick={fetchWithRequests}
+                    type="submit"
+                    disabled={withReqLoading}
                     style={{ backgroundColor: '#34c38f', color: '#fff', border: 'none', padding: '9px 22px', borderRadius: '4px', fontSize: '0.88rem', fontWeight: '600', cursor: 'pointer' }}
                   >
-                    Submit
+                    {withReqLoading ? 'Loading...' : 'Submit'}
                   </button>
-                </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWithReqDate('');
+                      setWithReqSearch('');
+                      setWithReqStatus('all');
+                      setWithReqPage(1);
+                      fetchWithRequests('', 1, withReqPerPage, '', 'all');
+                    }}
+                    style={{ backgroundColor: '#6c757d', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: '4px', fontSize: '0.88rem', fontWeight: '600', cursor: 'pointer' }}
+                  >
+                    Reset
+                  </button>
+                </form>
               </div>
 
               {/* Data Table Card */}
@@ -7700,7 +8010,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     <tbody>
                       {withReqList.map((item, idx) => (
                         <tr key={item.id} style={{ borderBottom: '1px solid #eff2f7' }}>
-                          <td style={{ padding: '10px 12px' }}>{idx + 1}</td>
+                          <td style={{ padding: '10px 12px' }}>{(withReqPage - 1) * withReqPerPage + idx + 1}</td>
                           <td style={{ padding: '10px 12px' }}>
                             <button
                               type="button"
@@ -7795,6 +8105,23 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Server-Side Pagination Bar */}
+                <PaginationBar
+                  currentPage={withReqPage}
+                  pageSize={withReqPerPage}
+                  totalItems={withReqTotalCount}
+                  onPageChange={(p) => {
+                    setWithReqPage(p);
+                    fetchWithRequests(withReqDate, p, withReqPerPage, withReqSearch, withReqStatus);
+                  }}
+                  onPageSizeChange={(sz) => {
+                    setWithReqPerPage(sz);
+                    setWithReqPage(1);
+                    fetchWithRequests(withReqDate, 1, sz, withReqSearch, withReqStatus);
+                  }}
+                  itemName="withdrawals"
+                />
               </div>
             </div>
           )}
@@ -8580,8 +8907,8 @@ const AdminDashboard = ({ setAdminAuth }) => {
               {/* Filter Form Card */}
               <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px', border: '1px solid #eff2f7', boxShadow: '0 0.75rem 1.5rem rgba(18,38,63,.03)', marginBottom: '24px' }}>
                 <h5 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: '#495057', fontWeight: '600' }}>Filter Bids</h5>
-                <form onSubmit={(e) => { e.preventDefault(); fetchReportBidHistory(); }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'flex-end' }}>
+                <form onSubmit={(e) => { e.preventDefault(); setBidHistoryPage(1); fetchReportBidHistory(bidHistoryDate, bidHistoryGame, bidHistoryType, 1, bidHistoryPerPage, bidHistorySearch); }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', alignItems: 'flex-end' }}>
                     <div>
                       <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Date</label>
                       <input
@@ -8626,6 +8953,17 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     </div>
 
                     <div>
+                      <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Search User / Pana / Digit</label>
+                      <input
+                        type="text"
+                        placeholder="Search..."
+                        value={bidHistorySearch}
+                        onChange={(e) => setBidHistorySearch(e.target.value)}
+                        style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem', color: '#495057', outline: 'none' }}
+                      />
+                    </div>
+
+                    <div>
                       <button
                         type="submit"
                         disabled={bidHistoryLoading}
@@ -8642,7 +8980,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
               <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px', border: '1px solid #eff2f7', boxShadow: '0 0.75rem 1.5rem rgba(18,38,63,.03)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h5 style={{ margin: 0, fontSize: '1rem', color: '#495057', fontWeight: '600' }}>Bid History List</h5>
-                  <span style={{ fontSize: '0.82rem', color: '#74788d' }}>Total Bids: <strong>{bidHistoryList.length}</strong></span>
+                  <span style={{ fontSize: '0.82rem', color: '#74788d' }}>Total Bids: <strong>{bidHistoryTotalCount}</strong></span>
                 </div>
 
                 <div style={{ overflowX: 'auto' }}>
@@ -8716,6 +9054,23 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Server-Side Pagination Bar */}
+                <PaginationBar
+                  currentPage={bidHistoryPage}
+                  pageSize={bidHistoryPerPage}
+                  totalItems={bidHistoryTotalCount}
+                  onPageChange={(p) => {
+                    setBidHistoryPage(p);
+                    fetchReportBidHistory(bidHistoryDate, bidHistoryGame, bidHistoryType, p, bidHistoryPerPage, bidHistorySearch);
+                  }}
+                  onPageSizeChange={(sz) => {
+                    setBidHistoryPerPage(sz);
+                    setBidHistoryPage(1);
+                    fetchReportBidHistory(bidHistoryDate, bidHistoryGame, bidHistoryType, 1, sz, bidHistorySearch);
+                  }}
+                  itemName="bids"
+                />
               </div>
             </div>
           )}
@@ -8880,8 +9235,8 @@ const AdminDashboard = ({ setAdminAuth }) => {
               {/* Filter Form Card */}
               <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px', border: '1px solid #eff2f7', boxShadow: '0 0.75rem 1.5rem rgba(18,38,63,.03)', marginBottom: '24px' }}>
                 <h5 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: '#495057', fontWeight: '600' }}>Filter Winners</h5>
-                <form onSubmit={(e) => { e.preventDefault(); fetchReportWinning(); }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'flex-end' }}>
+                <form onSubmit={(e) => { e.preventDefault(); setWinningPage(1); fetchReportWinning(winningDate, winningGame, winningSession, 1, winningPerPage, winningSearch); }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', alignItems: 'flex-end' }}>
                     <div>
                       <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Date</label>
                       <input
@@ -8921,6 +9276,17 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     </div>
 
                     <div>
+                      <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Search Phone / Name</label>
+                      <input
+                        type="text"
+                        placeholder="Search..."
+                        value={winningSearch}
+                        onChange={(e) => setWinningSearch(e.target.value)}
+                        style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem', color: '#495057', outline: 'none' }}
+                      />
+                    </div>
+
+                    <div>
                       <button
                         type="submit"
                         disabled={winningLoading}
@@ -8943,6 +9309,9 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     </span>
                     <span style={{ backgroundColor: '#e1effe', color: '#1e429f', padding: '4px 10px', borderRadius: '4px', fontSize: '0.82rem', fontWeight: 'bold' }}>
                       Total Points: {winningTotalPoints}
+                    </span>
+                    <span style={{ backgroundColor: '#edf2f7', color: '#495057', padding: '4px 10px', borderRadius: '4px', fontSize: '0.82rem', fontWeight: 'bold' }}>
+                      Total Records: {winningTotalCount}
                     </span>
                   </div>
                 </div>
@@ -8993,6 +9362,23 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Server-Side Pagination Bar */}
+                <PaginationBar
+                  currentPage={winningPage}
+                  pageSize={winningPerPage}
+                  totalItems={winningTotalCount}
+                  onPageChange={(p) => {
+                    setWinningPage(p);
+                    fetchReportWinning(winningDate, winningGame, winningSession, p, winningPerPage, winningSearch);
+                  }}
+                  onPageSizeChange={(sz) => {
+                    setWinningPerPage(sz);
+                    setWinningPage(1);
+                    fetchReportWinning(winningDate, winningGame, winningSession, 1, sz, winningSearch);
+                  }}
+                  itemName="winners"
+                />
               </div>
             </div>
           )}
@@ -9012,9 +9398,9 @@ const AdminDashboard = ({ setAdminAuth }) => {
               {/* Filter Form Card */}
               <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px', border: '1px solid #eff2f7', boxShadow: '0 0.75rem 1.5rem rgba(18,38,63,.03)', marginBottom: '24px' }}>
                 <h5 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: '#495057', fontWeight: '600' }}>Filter Transfers</h5>
-                <form onSubmit={(e) => { e.preventDefault(); fetchReportTransfer(); }}>
-                  <div style={{ display: 'flex', gap: '16px', maxWidth: '500px', alignItems: 'flex-end' }}>
-                    <div style={{ flex: 1 }}>
+                <form onSubmit={(e) => { e.preventDefault(); setTransferPage(1); fetchReportTransfer(transferDate, 1, transferPerPage, transferSearch); }}>
+                  <div style={{ display: 'flex', gap: '16px', maxWidth: '640px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: '180px' }}>
                       <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Date</label>
                       <input
                         type="date"
@@ -9022,6 +9408,16 @@ const AdminDashboard = ({ setAdminAuth }) => {
                         onChange={(e) => setTransferDate(e.target.value)}
                         style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem', color: '#495057', outline: 'none' }}
                         required
+                      />
+                    </div>
+                    <div style={{ flex: 1, minWidth: '220px' }}>
+                      <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Search Sender / Receiver / Phone</label>
+                      <input
+                        type="text"
+                        placeholder="Search..."
+                        value={transferSearch}
+                        onChange={(e) => setTransferSearch(e.target.value)}
+                        style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem', color: '#495057', outline: 'none' }}
                       />
                     </div>
                     <div>
@@ -9041,9 +9437,14 @@ const AdminDashboard = ({ setAdminAuth }) => {
               <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px', border: '1px solid #eff2f7', boxShadow: '0 0.75rem 1.5rem rgba(18,38,63,.03)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h5 style={{ margin: 0, fontSize: '1rem', color: '#495057', fontWeight: '600' }}>Transfer List</h5>
-                  <span style={{ backgroundColor: '#556ee6', color: '#ffffff', padding: '6px 14px', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 'bold' }}>
-                    Total Transfer Amount: ₹ {transferTotal}
-                  </span>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    <span style={{ backgroundColor: '#556ee6', color: '#ffffff', padding: '6px 14px', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                      Total Transfer Amount: ₹ {transferTotal}
+                    </span>
+                    <span style={{ backgroundColor: '#edf2f7', color: '#495057', padding: '6px 12px', borderRadius: '4px', fontSize: '0.82rem', fontWeight: 'bold' }}>
+                      Total Records: {transferTotalCount}
+                    </span>
+                  </div>
                 </div>
 
                 <div style={{ overflowX: 'auto' }}>
@@ -9058,9 +9459,9 @@ const AdminDashboard = ({ setAdminAuth }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {transferList.map(t => (
+                      {transferList.map((t, idx) => (
                         <tr key={t.id} style={{ borderBottom: '1px solid #eff2f7' }}>
-                          <td style={{ padding: '10px 12px' }}>{t.sno}</td>
+                          <td style={{ padding: '10px 12px' }}>{(transferPage - 1) * transferPerPage + idx + 1}</td>
                           <td style={{ padding: '10px 12px' }}>
                             <strong>{t.sender_name}</strong>
                             <div style={{ fontSize: '0.75rem', color: '#74788d' }}>{t.sender_phone}</div>
@@ -9082,6 +9483,23 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Server-Side Pagination Bar */}
+                <PaginationBar
+                  currentPage={transferPage}
+                  pageSize={transferPerPage}
+                  totalItems={transferTotalCount}
+                  onPageChange={(p) => {
+                    setTransferPage(p);
+                    fetchReportTransfer(transferDate, p, transferPerPage, transferSearch);
+                  }}
+                  onPageSizeChange={(sz) => {
+                    setTransferPerPage(sz);
+                    setTransferPage(1);
+                    fetchReportTransfer(transferDate, 1, sz, transferSearch);
+                  }}
+                  itemName="transfers"
+                />
               </div>
             </div>
           )}
@@ -9256,16 +9674,25 @@ const AdminDashboard = ({ setAdminAuth }) => {
               {/* Filter Form Card */}
               <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px', border: '1px solid #eff2f7', boxShadow: '0 0.75rem 1.5rem rgba(18,38,63,.03)', marginBottom: '24px' }}>
                 <h5 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: '#495057', fontWeight: '600' }}>Filter Withdrawals</h5>
-                <form onSubmit={(e) => { e.preventDefault(); fetchReportWithdraw(); }}>
-                  <div style={{ display: 'flex', gap: '16px', maxWidth: '500px', alignItems: 'flex-end' }}>
-                    <div style={{ flex: 1 }}>
+                <form onSubmit={(e) => { e.preventDefault(); setWithdrawRepPage(1); fetchReportWithdraw(withdrawRepDate, 1, withdrawRepPerPage, withdrawRepSearch); }}>
+                  <div style={{ display: 'flex', gap: '16px', maxWidth: '700px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: '160px' }}>
                       <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Date</label>
                       <input
                         type="date"
                         value={withdrawRepDate}
                         onChange={(e) => setWithdrawRepDate(e.target.value)}
                         style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem', color: '#495057', outline: 'none' }}
-                        required
+                      />
+                    </div>
+                    <div style={{ flex: 1, minWidth: '180px' }}>
+                      <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Search User / Phone</label>
+                      <input
+                        type="text"
+                        placeholder="Search name, phone..."
+                        value={withdrawRepSearch}
+                        onChange={(e) => setWithdrawRepSearch(e.target.value)}
+                        style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem', color: '#495057', outline: 'none' }}
                       />
                     </div>
                     <div>
@@ -9284,7 +9711,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
               {/* Data Table Card */}
               <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px', border: '1px solid #eff2f7', boxShadow: '0 0.75rem 1.5rem rgba(18,38,63,.03)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h5 style={{ margin: 0, fontSize: '1rem', color: '#495057', fontWeight: '600' }}>Withdraw List</h5>
+                  <h5 style={{ margin: 0, fontSize: '1rem', color: '#495057', fontWeight: '600' }}>Withdraw List ({withdrawRepTotalCount})</h5>
                   <span style={{ backgroundColor: '#28a745', color: '#ffffff', padding: '6px 14px', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 'bold' }}>
                     Total Transfer Amount is ₹ {withdrawRepTotal}
                   </span>
@@ -9345,6 +9772,22 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     </tbody>
                   </table>
                 </div>
+
+                <PaginationBar
+                  currentPage={withdrawRepPage}
+                  pageSize={withdrawRepPerPage}
+                  totalItems={withdrawRepTotalCount}
+                  onPageChange={(p) => {
+                    setWithdrawRepPage(p);
+                    fetchReportWithdraw(withdrawRepDate, p, withdrawRepPerPage, withdrawRepSearch);
+                  }}
+                  onPageSizeChange={(sz) => {
+                    setWithdrawRepPerPage(sz);
+                    setWithdrawRepPage(1);
+                    fetchReportWithdraw(withdrawRepDate, 1, sz, withdrawRepSearch);
+                  }}
+                  itemName="withdrawals"
+                />
               </div>
             </div>
           )}
@@ -9364,28 +9807,53 @@ const AdminDashboard = ({ setAdminAuth }) => {
               {/* Filter Form Card */}
               <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '24px', border: '1px solid #eff2f7', boxShadow: '0 0.75rem 1.5rem rgba(18,38,63,.03)', marginBottom: '24px' }}>
                 <h5 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: '#495057', fontWeight: '600' }}>Filter Auto Deposits</h5>
-                <div style={{ display: 'flex', gap: '16px', maxWidth: '400px' }}>
-                  <div style={{ flex: 1 }}>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setAutoDepPage(1);
+                    fetchReportAutoDeposit(autoDepDate, 1, autoDepPerPage, autoDepSearch);
+                  }}
+                  style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}
+                >
+                  <div style={{ flex: 1, minWidth: '180px', maxWidth: '240px' }}>
                     <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Date</label>
                     <input
                       type="date"
                       value={autoDepDate}
-                      onChange={(e) => {
-                        setAutoDepDate(e.target.value);
-                      }}
+                      onChange={(e) => setAutoDepDate(e.target.value)}
                       style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem', color: '#495057', outline: 'none' }}
                     />
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                    <button
-                      onClick={fetchReportAutoDeposit}
-                      disabled={autoDepLoading}
-                      style={{ padding: '10px 20px', backgroundColor: '#556ee6', color: '#ffffff', border: 'none', borderRadius: '4px', fontSize: '0.88rem', fontWeight: '600', cursor: 'pointer' }}
-                    >
-                      Search
-                    </button>
+                  <div style={{ flex: 1, minWidth: '220px', maxWidth: '300px' }}>
+                    <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Search User / Phone / ID</label>
+                    <input
+                      type="text"
+                      placeholder="Search..."
+                      value={autoDepSearch}
+                      onChange={(e) => setAutoDepSearch(e.target.value)}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem', color: '#495057', outline: 'none' }}
+                    />
                   </div>
-                </div>
+                  <button
+                    type="submit"
+                    disabled={autoDepLoading}
+                    style={{ padding: '10px 20px', backgroundColor: '#556ee6', color: '#ffffff', border: 'none', borderRadius: '4px', fontSize: '0.88rem', fontWeight: '600', cursor: 'pointer' }}
+                  >
+                    {autoDepLoading ? 'Loading...' : 'Search'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAutoDepDate('');
+                      setAutoDepSearch('');
+                      setAutoDepPage(1);
+                      fetchReportAutoDeposit('', 1, autoDepPerPage, '');
+                    }}
+                    style={{ padding: '10px 16px', backgroundColor: '#6c757d', color: '#ffffff', border: 'none', borderRadius: '4px', fontSize: '0.88rem', fontWeight: '600', cursor: 'pointer' }}
+                  >
+                    Reset
+                  </button>
+                </form>
 
                 {/* Summary Badges */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '18px' }}>
@@ -9426,7 +9894,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     <tbody>
                       {autoDepList.map((d, index) => (
                         <tr key={d.id} style={{ borderBottom: '1px solid #eff2f7' }}>
-                          <td style={{ padding: '10px 12px' }}>{index + 1}</td>
+                          <td style={{ padding: '10px 12px' }}>{(autoDepPage - 1) * autoDepPerPage + index + 1}</td>
                           <td style={{ padding: '10px 12px' }}>
                             <strong>{d.user_name || 'N/A'}</strong>
                           </td>
@@ -9475,6 +9943,23 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Server-Side Pagination Bar */}
+                <PaginationBar
+                  currentPage={autoDepPage}
+                  pageSize={autoDepPerPage}
+                  totalItems={autoDepTotalCount}
+                  onPageChange={(p) => {
+                    setAutoDepPage(p);
+                    fetchReportAutoDeposit(autoDepDate, p, autoDepPerPage, autoDepSearch);
+                  }}
+                  onPageSizeChange={(sz) => {
+                    setAutoDepPerPage(sz);
+                    setAutoDepPage(1);
+                    fetchReportAutoDeposit(autoDepDate, 1, sz, autoDepSearch);
+                  }}
+                  itemName="auto deposits"
+                />
               </div>
             </div>
           )}
@@ -9493,8 +9978,15 @@ const AdminDashboard = ({ setAdminAuth }) => {
 
               {/* Date Filter Card */}
               <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '20px', border: '1px solid #eff2f7', marginBottom: '20px' }}>
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: '220px', maxWidth: '320px' }}>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setAddFundRepPage(1);
+                    fetchAddFundReport(addFundRepDate, 1, addFundRepPerPage, addFundRepSearch);
+                  }}
+                  style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}
+                >
+                  <div style={{ flex: 1, minWidth: '180px', maxWidth: '240px' }}>
                     <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Date</label>
                     <input
                       type="date"
@@ -9503,13 +9995,36 @@ const AdminDashboard = ({ setAdminAuth }) => {
                       style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem' }}
                     />
                   </div>
+                  <div style={{ flex: 1, minWidth: '220px', maxWidth: '300px' }}>
+                    <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '6px' }}>Search Phone / Name</label>
+                    <input
+                      type="text"
+                      placeholder="Search..."
+                      value={addFundRepSearch}
+                      onChange={(e) => setAddFundRepSearch(e.target.value)}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem' }}
+                    />
+                  </div>
                   <button
-                    onClick={fetchAddFundReport}
+                    type="submit"
+                    disabled={addFundRepLoading}
                     style={{ backgroundColor: '#34c38f', color: '#fff', border: 'none', padding: '9px 22px', borderRadius: '4px', fontSize: '0.88rem', fontWeight: '600', cursor: 'pointer' }}
                   >
-                    Submit
+                    {addFundRepLoading ? 'Loading...' : 'Submit'}
                   </button>
-                </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddFundRepDate('');
+                      setAddFundRepSearch('');
+                      setAddFundRepPage(1);
+                      fetchAddFundReport('', 1, addFundRepPerPage, '');
+                    }}
+                    style={{ backgroundColor: '#6c757d', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: '4px', fontSize: '0.88rem', fontWeight: '600', cursor: 'pointer' }}
+                  >
+                    Reset
+                  </button>
+                </form>
               </div>
 
               {/* Data Table Card */}
@@ -9532,7 +10047,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     <tbody>
                       {addFundRepList.map((item, idx) => (
                         <tr key={item.id} style={{ borderBottom: '1px solid #eff2f7' }}>
-                          <td style={{ padding: '10px 12px' }}>{idx + 1}</td>
+                          <td style={{ padding: '10px 12px' }}>{(addFundRepPage - 1) * addFundRepPerPage + idx + 1}</td>
                           <td style={{ padding: '10px 12px' }}>
                             <button
                               type="button"
@@ -9573,6 +10088,23 @@ const AdminDashboard = ({ setAdminAuth }) => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Server-Side Pagination Bar */}
+                <PaginationBar
+                  currentPage={addFundRepPage}
+                  pageSize={addFundRepPerPage}
+                  totalItems={addFundRepTotalCount}
+                  onPageChange={(p) => {
+                    setAddFundRepPage(p);
+                    fetchAddFundReport(addFundRepDate, p, addFundRepPerPage, addFundRepSearch);
+                  }}
+                  onPageSizeChange={(sz) => {
+                    setAddFundRepPerPage(sz);
+                    setAddFundRepPage(1);
+                    fetchAddFundReport(addFundRepDate, 1, sz, addFundRepSearch);
+                  }}
+                  itemName="records"
+                />
               </div>
             </div>
           )}

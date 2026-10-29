@@ -14,6 +14,7 @@ const DataTable = ({
   serverSide = false,
   totalItems: serverTotalItems,
   currentPage: serverCurrentPage = 1,
+  pageSize: serverPageSize,
   onPageChange,
   onSearchChange,
   onPageSizeChange,
@@ -75,8 +76,8 @@ const DataTable = ({
 
   // Pagination Variables
   const currentPage = serverSide ? serverCurrentPage : clientPage;
-  const pageSize = serverSide ? defaultPageSize : clientPageSize;
-  const totalItems = serverSide ? (serverTotalItems ?? data.length) : sortedData.length;
+  const pageSize = serverSide ? (serverPageSize || clientPageSize || defaultPageSize) : clientPageSize;
+  const totalItems = serverSide ? (serverTotalItems !== undefined ? serverTotalItems : (data ? data.length : 0)) : sortedData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
   // Paginated Data Chunk
@@ -97,11 +98,10 @@ const DataTable = ({
 
   const handlePageSizeSelect = (e) => {
     const newSize = parseInt(e.target.value, 10);
+    setClientPageSize(newSize);
+    setClientPage(1);
     if (serverSide && onPageSizeChange) {
       onPageSizeChange(newSize);
-    } else {
-      setClientPageSize(newSize);
-      setClientPage(1);
     }
   };
 
@@ -385,10 +385,138 @@ const btnPaginationStyle = (disabled) => ({
   border: '1px solid #e2e8f0',
   backgroundColor: '#ffffff',
   color: disabled ? '#cbd5e0' : '#4a5568',
-  fontSize: '0.82rem',
-  cursor: disabled ? 'not-allowed' : 'pointer',
-  transition: 'all 0.15s ease',
   outline: 'none'
 });
+
+export const PaginationBar = ({
+  currentPage = 1,
+  totalPages = 1,
+  totalItems = 0,
+  pageSize = 10,
+  pageSizeOptions = [10, 25, 50, 100],
+  onPageChange,
+  onPageSizeChange,
+  isMobile = false
+}) => {
+  const startEntry = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const endEntry = Math.min(totalItems, currentPage * pageSize);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    let start = Math.max(1, currentPage - 2);
+    let end = Math.min(totalPages, start + 4);
+    if (end - start < 4) {
+      start = Math.max(1, end - 4);
+    }
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
+  return (
+    <div style={{
+      padding: '12px 18px',
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '12px',
+      borderTop: '1px solid #edf2f7',
+      backgroundColor: '#fafbfc',
+      fontSize: '0.84rem',
+      color: '#64748b'
+    }}>
+      <div>
+        Showing <strong style={{ color: '#1e293b' }}>{startEntry}</strong> to <strong style={{ color: '#1e293b' }}>{endEntry}</strong> of <strong style={{ color: '#1e293b' }}>{totalItems}</strong> entries
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+        {onPageSizeChange && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Show:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+              style={{
+                padding: '4px 8px',
+                borderRadius: '6px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.8rem',
+                color: '#1e293b',
+                fontWeight: '600',
+                outline: 'none',
+                backgroundColor: '#ffffff',
+                cursor: 'pointer'
+              }}
+            >
+              {pageSizeOptions.map(opt => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <button
+            type="button"
+            onClick={() => onPageChange(1)}
+            disabled={currentPage <= 1}
+            style={btnPaginationStyle(currentPage <= 1)}
+            title="First Page"
+          >
+            <ChevronsLeft size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage <= 1}
+            style={btnPaginationStyle(currentPage <= 1)}
+            title="Previous Page"
+          >
+            <ChevronLeft size={15} />
+          </button>
+
+          {getPageNumbers().map(p => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => onPageChange(p)}
+              style={{
+                ...btnPaginationStyle(false),
+                backgroundColor: p === currentPage ? '#556ee6' : '#ffffff',
+                color: p === currentPage ? '#ffffff' : '#334155',
+                fontWeight: p === currentPage ? '700' : '500',
+                borderColor: p === currentPage ? '#556ee6' : '#cbd5e1'
+              }}
+            >
+              {p}
+            </button>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+            style={btnPaginationStyle(currentPage >= totalPages)}
+            title="Next Page"
+          >
+            <ChevronRight size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onPageChange(totalPages)}
+            disabled={currentPage >= totalPages}
+            style={btnPaginationStyle(currentPage >= totalPages)}
+            title="Last Page"
+          >
+            <ChevronsRight size={15} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default DataTable;
