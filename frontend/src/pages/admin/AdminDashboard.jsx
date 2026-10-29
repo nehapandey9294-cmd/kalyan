@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { 
   Users, Gamepad2, TrendingUp, RefreshCw, Calendar, Filter, 
   CheckCircle2, XCircle, Clock, Search, Trophy, Wallet, 
   ArrowUpRight, ShieldCheck, Sparkles, UserCheck, UserX, Eye,
   Home, Share2, Target, FileText, Settings, ChevronDown, ChevronRight, ChevronLeft, Menu, Maximize2, LogOut, Zap,
-  CreditCard, MessageSquare
+  CreditCard, MessageSquare, Bell
 } from 'lucide-react';
 import PaymentGatewayManager from './PaymentGatewayManager';
 import AdminSupportChat from './AdminSupportChat';
@@ -61,6 +61,10 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const location = useLocation();
   const token = localStorage.getItem('admin_token');
 
+  const getHeaders = () => ({
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
   // Handle auto logout when session expires (30m inactive or 1h max session)
   const handleSessionExpire = (reason) => {
     if (setAdminAuth) {
@@ -85,39 +89,142 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 992);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
+  const [adminName, setAdminName] = useState(() => localStorage.getItem('admin_name') || 'Admin');
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
-  // Poll and listen to live chat unread messages for sidebar badge
-  useEffect(() => {
-    const fetchChatUnread = async () => {
-      try {
-        const res = await api.get('/chat/admin/conversations');
-        if (res.data?.success === '1' && Array.isArray(res.data.data)) {
-          const totalUnread = res.data.data.reduce((acc, c) => acc + (Number(c.unread_count || 0) > 0 ? 1 : 0), 0);
-          setChatUnreadCount(totalUnread);
+  // Real-time Badge Counts state for Menu and Notifications
+  const [badgeCounts, setBadgeCounts] = useState({
+    pending_deposits: 0,
+    pending_withdrawals: 0,
+    pending_auto_deposits: 0,
+    unread_chats: 0,
+    unapproved_users: 0,
+    total_wallet_pending: 0,
+    total_notifications: 0
+  });
+  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
+  const [adminToast, setAdminToast] = useState(null);
+  const toastTimeoutRef = useRef(null);
+  const prevBadgeTotalsRef = useRef(null);
+
+  const showAdminToast = ({ title, message, tab }) => {
+    playNotificationChime();
+    setAdminToast({ title, message, tab });
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => {
+      setAdminToast(null);
+    }, 7000);
+  };
+
+  // Synthesized notification audio chime (friendly dual tone)
+  const playNotificationChime = () => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      const now = ctx.currentTime;
+      osc.frequency.setValueAtTime(587.33, now); // D5
+      osc.frequency.setValueAtTime(880, now + 0.12); // A5
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.48);
+    } catch (e) {
+      // Audio autoplay policy handled
+    }
+  };
+
+  // Fetch badge counts from backend
+  const fetchBadgeCounts = async (allowSound = false) => {
+    try {
+      const res = await api.get('/admin/badge-counts', getHeaders());
+      if (res.data && res.data.success === '1' && res.data.data) {
+        const counts = res.data.data;
+        const newTotal = Number(counts.total_notifications || 0);
+        if (allowSound && prevBadgeTotalsRef.current !== null && newTotal > prevBadgeTotalsRef.current) {
+          playNotificationChime();
         }
-      } catch (e) {}
-    };
-    fetchChatUnread();
-    const interval = setInterval(fetchChatUnread, 30000);
+        prevBadgeTotalsRef.current = newTotal;
+        setBadgeCounts(counts);
+        if (typeof counts.unread_chats === 'number') {
+          setChatUnreadCount(counts.unread_chats);
+        }
+      }
+    } catch (e) {
+      // badge counts error ignored silently
+    }
+  };
+
+  // Poll & listen to real-time badge updates and chat messages
+  useEffect(() => {
+    // Authenticate & connect Admin WebSocket immediately
+    chatSocket.init({ role: 'admin', name: adminName || 'Admin' });
+
+    fetchBadgeCounts(false);
+    const interval = setInterval(() => {
+      fetchBadgeCounts(true);
+    }, 12000);
+
+    const unsubBadge = chatSocket.onBadgeUpdate((data) => {
+      fetchBadgeCounts(true);
+      if (data && data.message) {
+        showAdminToast({
+          title: data.title || (data.event === 'new_user' ? 'New User Registered' : 'Notification Alert'),
+          message: data.message,
+          tab: data.event === 'new_user' ? 'user_management' : (data.event === 'new_deposit' ? 'deposits' : (data.event === 'new_withdraw' ? 'withdrawals' : ''))
+        });
+      }
+    });
 
     const unsubMsg = chatSocket.onMessage((msg) => {
       if (msg && msg.sender_type === 'user') {
-        setChatUnreadCount(prev => prev + 1);
+        fetchBadgeCounts(true);
+        if (activeTab !== 'support_chat') {
+          showAdminToast({
+            title: 'New Chat Message',
+            message: `💬 ${msg.sender_name || msg.user_phone || 'User'}: ${msg.message || 'Sent an attachment'}`,
+            tab: 'support_chat'
+          });
+        }
       }
     });
 
     return () => {
       clearInterval(interval);
+      unsubBadge();
       unsubMsg();
     };
-  }, []);
+  }, [adminName, activeTab]);
 
   useEffect(() => {
     if (activeTab === 'support_chat') {
       setChatUnreadCount(0);
+      setBadgeCounts(prev => ({
+        ...prev,
+        unread_chats: 0,
+        total_notifications: Math.max(0, (prev.total_notifications || 0) - (prev.unread_chats || 0))
+      }));
     }
   }, [activeTab]);
+
+  // Close notifications dropdown on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (showNotificationsDropdown && !e.target.closest('#admin-notifications-container')) {
+        setShowNotificationsDropdown(false);
+      }
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, [showNotificationsDropdown]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -203,7 +310,6 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [adminCoins, setAdminCoins] = useState(0);
-  const [adminName, setAdminName] = useState(() => localStorage.getItem('admin_name') || 'Admin');
 
   // Dashboard Stats (Image 2)
   const [metrics, setMetrics] = useState({
@@ -518,10 +624,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const [addFundRepDate, setAddFundRepDate] = useState('');
   const [addFundRepList, setAddFundRepList] = useState([]);
   const [addFundRepLoading, setAddFundRepLoading] = useState(false);
-
-  const getHeaders = () => ({
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  // (getHeaders defined at top scope)
 
   const fetchAdminCoins = async () => {
     if (!token) return;
@@ -1420,6 +1523,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
         alert(res.data.msg || (action === 'approve' ? 'Fund request approved successfully' : 'Fund request rejected'));
         fetchFundRequests();
         fetchAdminCoins();
+        fetchBadgeCounts(false);
         if (selectedUserId) {
           fetchUserFullDetails(selectedUserId);
         }
@@ -1457,6 +1561,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
         alert(res.data.msg || (action === 'approve' ? 'Withdrawal request approved successfully' : 'Withdrawal request rejected'));
         fetchWithRequests();
         fetchAdminCoins();
+        fetchBadgeCounts(false);
         if (selectedWithdrawModal) setSelectedWithdrawModal(null);
         if (selectedUserId) {
           fetchUserFullDetails(selectedUserId);
@@ -1640,6 +1745,9 @@ const AdminDashboard = ({ setAdminAuth }) => {
       const res = await api.post('/admin/users/toggle-field', { userId, field }, getHeaders());
       if (res.data.success === '1') {
         setUsers(prev => prev.map(u => u.id === userId ? { ...u, [field]: res.data.newVal } : u));
+        if (field === 'status') {
+          fetchBadgeCounts(false);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -2046,6 +2154,92 @@ const AdminDashboard = ({ setAdminAuth }) => {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f4f5f8', color: '#495057', fontFamily: "'Outfit', 'Inter', -apple-system, sans-serif", position: 'relative', overflowX: 'hidden' }}>
 
+      <style>{`
+        @keyframes badgePulse {
+          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+          70% { transform: scale(1.08); box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        @keyframes slideInRight {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+      `}</style>
+
+      {/* Floating Live Notification Toast */}
+      {adminToast && (
+        <div
+          onClick={() => {
+            if (adminToast.tab) handleTabClick(adminToast.tab);
+            setAdminToast(null);
+          }}
+          style={{
+            position: 'fixed',
+            top: '20px',
+            right: isMobile ? '10px' : '24px',
+            zIndex: 999999,
+            backgroundColor: '#1e293b',
+            color: '#ffffff',
+            boxShadow: '0 12px 30px rgba(0, 0, 0, 0.4)',
+            borderRadius: '12px',
+            padding: '14px 18px',
+            maxWidth: '90vw',
+            width: '360px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            border: '1px solid rgba(241, 103, 62, 0.5)',
+            cursor: adminToast.tab ? 'pointer' : 'default',
+            animation: 'slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}
+        >
+          <div style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '10px',
+            backgroundColor: 'rgba(241, 103, 62, 0.2)',
+            color: '#f1673e',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <Bell size={20} className="admin-badge-pulse" />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '0.75rem', color: '#f1673e', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {adminToast.title || 'New Activity Alert'}
+            </div>
+            <div style={{ fontSize: '0.86rem', fontWeight: '600', color: '#f8fafc', marginTop: '2px', wordBreak: 'break-word' }}>
+              {adminToast.message}
+            </div>
+            {adminToast.tab && (
+              <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px' }}>
+                Click to view details &rarr;
+              </div>
+            )}
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setAdminToast(null);
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#94a3b8',
+              cursor: 'pointer',
+              fontSize: '1.3rem',
+              lineHeight: 1,
+              padding: '2px 4px'
+            }}
+            title="Dismiss"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
       {/* Mobile Drawer Overlay Backdrop */}
       {isMobile && isMobileSidebarOpen && (
         <div
@@ -2119,9 +2313,38 @@ const AdminDashboard = ({ setAdminAuth }) => {
 
           {/* User Management */}
           <div onClick={() => handleTabClick('user_management')} style={sidebarItemStyle(activeTab === 'user_management')}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-              <Users size={18} style={{ flexShrink: 0, color: activeTab === 'user_management' ? '#f1673e' : '#a6b0cf' }} />
-              {(!isDesktopSidebarCollapsed || isMobile) && <span style={{ whiteSpace: 'nowrap' }}>User Management</span>}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                <div style={{ position: 'relative', display: 'inline-flex' }}>
+                  <Users size={18} style={{ flexShrink: 0, color: activeTab === 'user_management' ? '#f1673e' : '#a6b0cf' }} />
+                  {badgeCounts.unapproved_users > 0 && isDesktopSidebarCollapsed && !isMobile && (
+                    <span style={{
+                      position: 'absolute',
+                      top: -2,
+                      right: -2,
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: '#a855f7',
+                      boxShadow: '0 0 6px #a855f7'
+                    }} />
+                  )}
+                </div>
+                {(!isDesktopSidebarCollapsed || isMobile) && <span style={{ whiteSpace: 'nowrap' }}>User Management</span>}
+              </div>
+              {badgeCounts.unapproved_users > 0 && (!isDesktopSidebarCollapsed || isMobile) && (
+                <span style={{
+                  backgroundColor: '#a855f7',
+                  color: '#ffffff',
+                  fontSize: '0.68rem',
+                  fontWeight: '700',
+                  padding: '2px 7px',
+                  borderRadius: '10px',
+                  boxShadow: '0 2px 6px rgba(168, 85, 247, 0.4)'
+                }}>
+                  {badgeCounts.unapproved_users > 99 ? '99+' : badgeCounts.unapproved_users}
+                </span>
+              )}
             </div>
           </div>
 
@@ -2144,15 +2367,43 @@ const AdminDashboard = ({ setAdminAuth }) => {
           {/* Report Management (Collapsible) */}
           <div>
             <div onClick={() => toggleMenu('reports')} style={sidebarItemStyle(activeTab.startsWith('report_'))}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-                <FileText size={18} style={{ flexShrink: 0, color: activeTab.startsWith('report_') ? '#f1673e' : '#a6b0cf' }} />
-                {(!isDesktopSidebarCollapsed || isMobile) && <span style={{ whiteSpace: 'nowrap' }}>Report Management</span>}
-              </div>
-              {(!isDesktopSidebarCollapsed || isMobile) && (
-                <div style={{ display: 'flex', alignItems: 'center', color: '#a6b0cf' }}>
-                  {openMenus.reports ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                  <div style={{ position: 'relative', display: 'inline-flex' }}>
+                    <FileText size={18} style={{ flexShrink: 0, color: activeTab.startsWith('report_') ? '#f1673e' : '#a6b0cf' }} />
+                    {badgeCounts.pending_auto_deposits > 0 && isDesktopSidebarCollapsed && !isMobile && (
+                      <span style={{
+                        position: 'absolute',
+                        top: -2,
+                        right: -2,
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        backgroundColor: '#f59e0b',
+                        boxShadow: '0 0 6px #f59e0b'
+                      }} />
+                    )}
+                  </div>
+                  {(!isDesktopSidebarCollapsed || isMobile) && <span style={{ whiteSpace: 'nowrap' }}>Report Management</span>}
                 </div>
-              )}
+                {(!isDesktopSidebarCollapsed || isMobile) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#a6b0cf' }}>
+                    {badgeCounts.pending_auto_deposits > 0 && !openMenus.reports && (
+                      <span style={{
+                        backgroundColor: '#f59e0b',
+                        color: '#ffffff',
+                        fontSize: '0.66rem',
+                        fontWeight: '700',
+                        padding: '1px 6px',
+                        borderRadius: '10px'
+                      }}>
+                        {badgeCounts.pending_auto_deposits}
+                      </span>
+                    )}
+                    {openMenus.reports ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </div>
+                )}
+              </div>
             </div>
             {openMenus.reports && (!isDesktopSidebarCollapsed || isMobile) && (
               <div>
@@ -2171,8 +2422,26 @@ const AdminDashboard = ({ setAdminAuth }) => {
                 <div onClick={() => handleTabClick('report_withdraw')} style={submenuItemStyle(activeTab === 'report_withdraw')}>
                   Withdraw Report
                 </div>
-                <div onClick={() => handleTabClick('report_auto_deposit')} style={submenuItemStyle(activeTab === 'report_auto_deposit')}>
-                  Auto Deposit History
+                <div onClick={() => handleTabClick('report_auto_deposit')} style={{
+                  ...submenuItemStyle(activeTab === 'report_auto_deposit'),
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <span>Auto Deposit History</span>
+                  {badgeCounts.pending_auto_deposits > 0 && (
+                    <span style={{
+                      backgroundColor: '#f59e0b',
+                      color: '#ffffff',
+                      fontSize: '0.66rem',
+                      fontWeight: '700',
+                      padding: '1px 6px',
+                      borderRadius: '10px',
+                      marginRight: '8px'
+                    }}>
+                      {badgeCounts.pending_auto_deposits}
+                    </span>
+                  )}
                 </div>
                 <div onClick={() => handleTabClick('report_add_fund')} style={submenuItemStyle(activeTab === 'report_add_fund')}>
                   Add Fund Report
@@ -2184,23 +2453,93 @@ const AdminDashboard = ({ setAdminAuth }) => {
           {/* Wallet Management (Collapsible) */}
           <div>
             <div onClick={() => toggleMenu('wallet')} style={sidebarItemStyle(['deposits', 'withdrawals', 'add_fund_wallet', 'bid_revert'].includes(activeTab))}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-                <Wallet size={18} style={{ flexShrink: 0, color: ['deposits', 'withdrawals', 'add_fund_wallet', 'bid_revert'].includes(activeTab) ? '#f1673e' : '#a6b0cf' }} />
-                {(!isDesktopSidebarCollapsed || isMobile) && <span style={{ whiteSpace: 'nowrap' }}>Wallet Management</span>}
-              </div>
-              {(!isDesktopSidebarCollapsed || isMobile) && (
-                <div style={{ display: 'flex', alignItems: 'center', color: '#a6b0cf' }}>
-                  {openMenus.wallet ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                  <div style={{ position: 'relative', display: 'inline-flex' }}>
+                    <Wallet size={18} style={{ flexShrink: 0, color: ['deposits', 'withdrawals', 'add_fund_wallet', 'bid_revert'].includes(activeTab) ? '#f1673e' : '#a6b0cf' }} />
+                    {badgeCounts.total_wallet_pending > 0 && isDesktopSidebarCollapsed && !isMobile && (
+                      <span style={{
+                        position: 'absolute',
+                        top: -2,
+                        right: -2,
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        backgroundColor: '#ef4444',
+                        boxShadow: '0 0 6px #ef4444'
+                      }} />
+                    )}
+                  </div>
+                  {(!isDesktopSidebarCollapsed || isMobile) && <span style={{ whiteSpace: 'nowrap' }}>Wallet Management</span>}
                 </div>
-              )}
+                {(!isDesktopSidebarCollapsed || isMobile) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#a6b0cf' }}>
+                    {badgeCounts.total_wallet_pending > 0 && (
+                      <span
+                        className="admin-badge-pulse"
+                        style={{
+                          backgroundColor: '#ef4444',
+                          color: '#ffffff',
+                          fontSize: '0.66rem',
+                          fontWeight: '700',
+                          padding: '1px 6px',
+                          borderRadius: '10px',
+                          boxShadow: '0 2px 6px rgba(239, 68, 68, 0.4)'
+                        }}
+                      >
+                        {badgeCounts.total_wallet_pending > 99 ? '99+' : badgeCounts.total_wallet_pending}
+                      </span>
+                    )}
+                    {openMenus.wallet ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </div>
+                )}
+              </div>
             </div>
             {openMenus.wallet && (!isDesktopSidebarCollapsed || isMobile) && (
               <div>
-                <div onClick={() => handleTabClick('deposits')} style={submenuItemStyle(activeTab === 'deposits')}>
-                  Fund Request
+                <div onClick={() => handleTabClick('deposits')} style={{
+                  ...submenuItemStyle(activeTab === 'deposits'),
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <span>Fund Request</span>
+                  {badgeCounts.pending_deposits > 0 && (
+                    <span style={{
+                      backgroundColor: '#10b981',
+                      color: '#ffffff',
+                      fontSize: '0.66rem',
+                      fontWeight: '700',
+                      padding: '1px 6px',
+                      borderRadius: '10px',
+                      marginRight: '8px',
+                      boxShadow: '0 1px 4px rgba(16, 185, 129, 0.4)'
+                    }}>
+                      {badgeCounts.pending_deposits}
+                    </span>
+                  )}
                 </div>
-                <div onClick={() => handleTabClick('withdrawals')} style={submenuItemStyle(activeTab === 'withdrawals')}>
-                  Withdraw Request
+                <div onClick={() => handleTabClick('withdrawals')} style={{
+                  ...submenuItemStyle(activeTab === 'withdrawals'),
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <span>Withdraw Request</span>
+                  {badgeCounts.pending_withdrawals > 0 && (
+                    <span style={{
+                      backgroundColor: '#ef4444',
+                      color: '#ffffff',
+                      fontSize: '0.66rem',
+                      fontWeight: '700',
+                      padding: '1px 6px',
+                      borderRadius: '10px',
+                      marginRight: '8px',
+                      boxShadow: '0 1px 4px rgba(239, 68, 68, 0.4)'
+                    }}>
+                      {badgeCounts.pending_withdrawals}
+                    </span>
+                  )}
                 </div>
                 <div onClick={() => handleTabClick('add_fund_wallet')} style={submenuItemStyle(activeTab === 'add_fund_wallet')}>
                   Add Fund (User Wallet)
@@ -2320,20 +2659,37 @@ const AdminDashboard = ({ setAdminAuth }) => {
           <div onClick={() => handleTabClick('support_chat')} style={sidebarItemStyle(activeTab === 'support_chat')}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-                <MessageSquare size={18} style={{ flexShrink: 0, color: activeTab === 'support_chat' ? '#f1673e' : '#a6b0cf' }} />
+                <div style={{ position: 'relative', display: 'inline-flex' }}>
+                  <MessageSquare size={18} style={{ flexShrink: 0, color: activeTab === 'support_chat' ? '#f1673e' : '#a6b0cf' }} />
+                  {(badgeCounts.unread_chats > 0 || chatUnreadCount > 0) && isDesktopSidebarCollapsed && !isMobile && (
+                    <span style={{
+                      position: 'absolute',
+                      top: -2,
+                      right: -2,
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: '#ef4444',
+                      boxShadow: '0 0 6px #ef4444'
+                    }} />
+                  )}
+                </div>
                 {(!isDesktopSidebarCollapsed || isMobile) && <span style={{ whiteSpace: 'nowrap' }}>Live Support Chat</span>}
               </div>
-              {chatUnreadCount > 0 && (!isDesktopSidebarCollapsed || isMobile) && (
-                <span style={{
-                  backgroundColor: '#ef4444',
-                  color: '#ffffff',
-                  fontSize: '0.7rem',
-                  fontWeight: '700',
-                  padding: '2px 7px',
-                  borderRadius: '10px',
-                  boxShadow: '0 2px 6px rgba(239, 68, 68, 0.4)'
-                }}>
-                  {chatUnreadCount}
+              {(badgeCounts.unread_chats > 0 || chatUnreadCount > 0) && (!isDesktopSidebarCollapsed || isMobile) && (
+                <span
+                  className="admin-badge-pulse"
+                  style={{
+                    backgroundColor: '#ef4444',
+                    color: '#ffffff',
+                    fontSize: '0.7rem',
+                    fontWeight: '700',
+                    padding: '2px 7px',
+                    borderRadius: '10px',
+                    boxShadow: '0 2px 6px rgba(239, 68, 68, 0.4)'
+                  }}
+                >
+                  {(badgeCounts.unread_chats || chatUnreadCount) > 99 ? '99+' : (badgeCounts.unread_chats || chatUnreadCount)}
                 </span>
               )}
             </div>
@@ -2418,8 +2774,362 @@ const AdminDashboard = ({ setAdminAuth }) => {
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '22px', position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '12px' : '20px', position: 'relative' }}>
 
+            {/* Notification Bell with Badge & Dropdown */}
+            <div id="admin-notifications-container" style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowNotificationsDropdown(prev => !prev)}
+                style={{
+                  background: showNotificationsDropdown ? 'rgba(255,255,255,0.1)' : 'transparent',
+                  border: 'none',
+                  color: badgeCounts.total_notifications > 0 ? '#ffffff' : '#a6b0cf',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '7px 9px',
+                  borderRadius: '8px',
+                  position: 'relative',
+                  outline: 'none',
+                  transition: 'all 0.2s ease'
+                }}
+                title="Pending Requests & Alerts"
+              >
+                <Bell size={20} />
+                {badgeCounts.total_notifications > 0 && (
+                  <span
+                    className="admin-badge-pulse"
+                    style={{
+                      position: 'absolute',
+                      top: '1px',
+                      right: '1px',
+                      backgroundColor: '#ef4444',
+                      color: '#ffffff',
+                      fontSize: '0.62rem',
+                      fontWeight: '700',
+                      padding: '1px 5px',
+                      borderRadius: '10px',
+                      minWidth: '17px',
+                      height: '17px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 2px 6px rgba(239, 68, 68, 0.6)'
+                    }}
+                  >
+                    {badgeCounts.total_notifications > 99 ? '99+' : badgeCounts.total_notifications}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Dropdown Popover */}
+              {showNotificationsDropdown && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '46px',
+                    right: isMobile ? '-75px' : '0px',
+                    backgroundColor: '#ffffff',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+                    borderRadius: '10px',
+                    width: '320px',
+                    maxWidth: '88vw',
+                    border: '1px solid #e2e8f0',
+                    overflow: 'hidden',
+                    zIndex: 9999
+                  }}
+                >
+                  <div style={{
+                    padding: '13px 16px',
+                    background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottom: '1px solid #334155'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Bell size={16} style={{ color: '#f1673e' }} />
+                      <span style={{ fontWeight: '700', fontSize: '0.88rem' }}>Pending Requests</span>
+                    </div>
+                    <span style={{
+                      backgroundColor: badgeCounts.total_notifications > 0 ? '#ef4444' : '#10b981',
+                      color: '#fff',
+                      fontSize: '0.68rem',
+                      fontWeight: '700',
+                      padding: '2px 8px',
+                      borderRadius: '10px'
+                    }}>
+                      {badgeCounts.total_notifications > 0 ? `${badgeCounts.total_notifications} Pending` : 'All Clear'}
+                    </span>
+                  </div>
+
+                  <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                    {/* Fund Requests */}
+                    <div
+                      onClick={() => {
+                        setShowNotificationsDropdown(false);
+                        handleTabClick('deposits');
+                      }}
+                      style={{
+                        padding: '12px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #f1f5f9',
+                        transition: 'background 0.15s ease'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#ecfdf5', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Wallet size={16} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.84rem', fontWeight: '600', color: '#1e293b' }}>Fund Deposit Requests</div>
+                          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Pending deposit approvals</div>
+                        </div>
+                      </div>
+                      {badgeCounts.pending_deposits > 0 ? (
+                        <span style={{ backgroundColor: '#10b981', color: '#fff', fontSize: '0.7rem', fontWeight: '700', padding: '2px 8px', borderRadius: '10px' }}>
+                          {badgeCounts.pending_deposits}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>0</span>
+                      )}
+                    </div>
+
+                    {/* Withdraw Requests */}
+                    <div
+                      onClick={() => {
+                        setShowNotificationsDropdown(false);
+                        handleTabClick('withdrawals');
+                      }}
+                      style={{
+                        padding: '12px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #f1f5f9',
+                        transition: 'background 0.15s ease'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#fef2f2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <ArrowUpRight size={16} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.84rem', fontWeight: '600', color: '#1e293b' }}>Withdraw Requests</div>
+                          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Pending payout requests</div>
+                        </div>
+                      </div>
+                      {badgeCounts.pending_withdrawals > 0 ? (
+                        <span style={{ backgroundColor: '#ef4444', color: '#fff', fontSize: '0.7rem', fontWeight: '700', padding: '2px 8px', borderRadius: '10px' }}>
+                          {badgeCounts.pending_withdrawals}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>0</span>
+                      )}
+                    </div>
+
+                    {/* Auto Deposit History */}
+                    <div
+                      onClick={() => {
+                        setShowNotificationsDropdown(false);
+                        handleTabClick('report_auto_deposit');
+                      }}
+                      style={{
+                        padding: '12px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #f1f5f9',
+                        transition: 'background 0.15s ease'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#fffbeb', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <CreditCard size={16} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.84rem', fontWeight: '600', color: '#1e293b' }}>Auto Deposit Transactions</div>
+                          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Pending UPI gateway verifications</div>
+                        </div>
+                      </div>
+                      {badgeCounts.pending_auto_deposits > 0 ? (
+                        <span style={{ backgroundColor: '#f59e0b', color: '#fff', fontSize: '0.7rem', fontWeight: '700', padding: '2px 8px', borderRadius: '10px' }}>
+                          {badgeCounts.pending_auto_deposits}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>0</span>
+                      )}
+                    </div>
+
+                    {/* Live Support Chat */}
+                    <div
+                      onClick={() => {
+                        setShowNotificationsDropdown(false);
+                        handleTabClick('support_chat');
+                      }}
+                      style={{
+                        padding: '12px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #f1f5f9',
+                        transition: 'background 0.15s ease'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#eff6ff', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <MessageSquare size={16} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.84rem', fontWeight: '600', color: '#1e293b' }}>Support Chat Messages</div>
+                          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Unread client inquiries</div>
+                        </div>
+                      </div>
+                      {(badgeCounts.unread_chats > 0 || chatUnreadCount > 0) ? (
+                        <span style={{ backgroundColor: '#3b82f6', color: '#fff', fontSize: '0.7rem', fontWeight: '700', padding: '2px 8px', borderRadius: '10px' }}>
+                          {badgeCounts.unread_chats || chatUnreadCount}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>0</span>
+                      )}
+                    </div>
+
+                    {/* Unapproved Users */}
+                    <div
+                      onClick={() => {
+                        setShowNotificationsDropdown(false);
+                        handleTabClick('user_management');
+                      }}
+                      style={{
+                        padding: '12px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        transition: 'background 0.15s ease'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#f3e8ff', color: '#a855f7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Users size={16} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.84rem', fontWeight: '600', color: '#1e293b' }}>Unapproved Users</div>
+                          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>New accounts pending approval</div>
+                        </div>
+                      </div>
+                      {badgeCounts.unapproved_users > 0 ? (
+                        <span style={{ backgroundColor: '#a855f7', color: '#fff', fontSize: '0.7rem', fontWeight: '700', padding: '2px 8px', borderRadius: '10px' }}>
+                          {badgeCounts.unapproved_users}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>0</span>
+                      )}
+                    </div>
+
+                    {/* Recent Notifications & Registrations List */}
+                    {Array.isArray(badgeCounts.recent_notifications) && badgeCounts.recent_notifications.length > 0 && (
+                      <div style={{ borderTop: '1px solid #e2e8f0', backgroundColor: '#fcfcfc' }}>
+                        <div style={{ padding: '8px 16px', fontSize: '0.72rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', backgroundColor: '#f8fafc' }}>
+                          Recent Registrations & Activity
+                        </div>
+                        {badgeCounts.recent_notifications.map((notif, idx) => (
+                          <div
+                            key={notif.id || idx}
+                            onClick={() => {
+                              setShowNotificationsDropdown(false);
+                              if (notif.tab) handleTabClick(notif.tab);
+                            }}
+                            style={{
+                              padding: '10px 16px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              cursor: 'pointer',
+                              borderTop: idx > 0 ? '1px solid #f1f5f9' : 'none',
+                              transition: 'background 0.15s ease'
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <div style={{ minWidth: 0, flex: 1, paddingRight: '8px' }}>
+                              <div style={{ fontSize: '0.82rem', fontWeight: '600', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {notif.message}
+                              </div>
+                              {notif.date && (
+                                <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '2px' }}>
+                                  {notif.date}
+                                </div>
+                              )}
+                            </div>
+                            <span style={{ fontSize: '0.7rem', color: '#f1673e', fontWeight: '600', flexShrink: 0 }}>
+                              View &rarr;
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{
+                    padding: '10px 16px',
+                    backgroundColor: '#f8fafc',
+                    borderTop: '1px solid #e2e8f0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}>
+                    <button
+                      onClick={() => fetchBadgeCounts(false)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#64748b',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        padding: '4px 6px'
+                      }}
+                    >
+                      <RefreshCw size={12} /> Refresh
+                    </button>
+                    <button
+                      onClick={() => setShowNotificationsDropdown(false)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#f1673e',
+                        fontSize: '0.78rem',
+                        fontWeight: '600',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Fullscreen Button */}
             <button

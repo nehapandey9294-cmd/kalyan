@@ -787,6 +787,18 @@ exports.submitUpiFundRequest = async (req, res) => {
       console.warn('user_auto_deposite update/insert error in submitUpiFundRequest:', depErr.message);
     }
 
+    try {
+      const { broadcastToAdmins } = require('../socket/chatSocket');
+      broadcastToAdmins({
+        type: 'badge_update',
+        event: 'new_deposit',
+        user: phone,
+        amount: amtNum,
+        utr: cleanUtr,
+        message: `New Deposit Request: ₹${amtNum} from ${phone}`
+      });
+    } catch (wsErr) {}
+
     return res.json({
       success: '1',
       msg: 'Deposit Request with UTR submitted successfully! Wallet will be credited shortly upon admin verification.'

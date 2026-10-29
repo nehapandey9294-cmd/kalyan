@@ -113,6 +113,85 @@ exports.getDashboardMetrics = async (req, res) => {
   }
 };
 
+// Get Real-time Badge Counts for Admin Sidebar & Navigation
+exports.getBadgeCounts = async (req, res) => {
+  try {
+    let pending_deposits = 0;
+    let pending_auto_deposits = 0;
+    let pending_withdrawals = 0;
+    let unread_chats = 0;
+    let unapproved_users = 0;
+
+    try {
+      const [[resDep]] = await db.query("SELECT COUNT(*) as cnt FROM user_fund_request WHERE status = '0'");
+      pending_deposits = Number(resDep?.cnt || 0);
+    } catch (e) {}
+
+    try {
+      const [[resAuto]] = await db.query("SELECT COUNT(*) as cnt FROM user_auto_deposite WHERE status = '0'");
+      pending_auto_deposits = Number(resAuto?.cnt || 0);
+    } catch (e) {}
+
+    try {
+      const [[resWith]] = await db.query("SELECT COUNT(*) as cnt FROM user_withdraw_request WHERE (status = '0' OR status = 0 OR status = 'Pending')");
+      pending_withdrawals = Number(resWith?.cnt || 0);
+    } catch (e) {}
+
+    try {
+      const [[resChat]] = await db.query("SELECT COUNT(DISTINCT user_phone) as cnt FROM chat_messages WHERE sender_type = 'user' AND is_read = 0");
+      unread_chats = Number(resChat?.cnt || 0);
+    } catch (e) {}
+
+    try {
+      const [[resUser]] = await db.query("SELECT COUNT(*) as cnt FROM user_info WHERE status = '0'");
+      unapproved_users = Number(resUser?.cnt || 0);
+    } catch (e) {}
+
+    let new_users_today = 0;
+    try {
+      const [[resNewUsers]] = await db.query("SELECT COUNT(*) as cnt FROM user_info WHERE DATE(date) = CURDATE()");
+      new_users_today = Number(resNewUsers?.cnt || 0);
+    } catch (e) {}
+
+    // Recent notifications list for admin dropdown
+    const recent_notifications = [];
+    try {
+      const [recentUsers] = await db.query("SELECT id, name, phone, date, status FROM user_info ORDER BY id DESC LIMIT 4");
+      (recentUsers || []).forEach(u => {
+        recent_notifications.push({
+          id: `user_${u.id}`,
+          type: 'new_user',
+          title: 'New User Registered',
+          message: `${u.name || 'User'} (${u.phone}) registered`,
+          date: u.date || '',
+          tab: 'user_management'
+        });
+      });
+    } catch (e) {}
+
+    const total_wallet_pending = pending_deposits + pending_withdrawals;
+    const total_notifications = total_wallet_pending + pending_auto_deposits + unread_chats + unapproved_users;
+
+    return res.json({
+      success: '1',
+      data: {
+        pending_deposits,
+        pending_auto_deposits,
+        pending_withdrawals,
+        total_wallet_pending,
+        unread_chats,
+        unapproved_users,
+        new_users_today,
+        total_notifications,
+        recent_notifications
+      }
+    });
+  } catch (err) {
+    console.error('getBadgeCounts error:', err);
+    return res.status(500).json({ success: '0', error: err.message });
+  }
+};
+
 // Get List of Users (Supports pagination and search)
 exports.getUsers = async (req, res) => {
   try {
@@ -408,6 +487,11 @@ exports.approveDeposit = async (req, res) => {
       }
     } catch (refErr) {}
 
+    try {
+      const { broadcastToAdmins } = require('../socket/chatSocket');
+      broadcastToAdmins({ type: 'badge_update', event: 'deposit_approved', id: depositId });
+    } catch (wsErr) {}
+
     return res.json({
       success: '1',
       msg: `Deposit of ₹${amount} approved & wallet updated successfully. New Balance: ₹${updatedWallet}`,
@@ -511,6 +595,11 @@ exports.rejectDeposit = async (req, res) => {
       }
     }
 
+    try {
+      const { broadcastToAdmins } = require('../socket/chatSocket');
+      broadcastToAdmins({ type: 'badge_update', event: 'deposit_rejected', id: depositId });
+    } catch (wsErr) {}
+
     return res.json({ success: '1', msg: 'Deposit request rejected' });
   } catch (err) {
     console.error('rejectDeposit error:', err);
@@ -605,6 +694,11 @@ exports.approveWithdrawal = async (req, res) => {
       [walletRemark, phone]
     );
 
+    try {
+      const { broadcastToAdmins } = require('../socket/chatSocket');
+      broadcastToAdmins({ type: 'badge_update', event: 'withdrawal_approved', id: withdrawId });
+    } catch (wsErr) {}
+
     return res.json({ success: '1', msg: 'Withdraw request approved successfully!' });
   } catch (err) {
     console.error(err);
@@ -653,6 +747,11 @@ exports.rejectWithdrawal = async (req, res) => {
       "UPDATE user_withdraw_request SET status = '-1', remark = ? WHERE id = ?",
       [walletRemark, withdrawId]
     );
+
+    try {
+      const { broadcastToAdmins } = require('../socket/chatSocket');
+      broadcastToAdmins({ type: 'badge_update', event: 'withdrawal_rejected', id: withdrawId });
+    } catch (wsErr) {}
 
     return res.json({ success: '1', msg: 'Withdraw request rejected & points refunded successfully!' });
   } catch (err) {

@@ -83,13 +83,18 @@ const Signup = ({ setAuth }) => {
 
       const resData = response.data;
       if (resData.success === '1') {
+        const welcomeName = resData.data?.name || formData.user_name || 'Player';
+        setSuccess(`🎉 Registration Successful! Welcome, ${welcomeName}. Logging you in...`);
         if (resData.data?.token) {
           localStorage.setItem('token', resData.data.token);
           localStorage.setItem('phone', resData.data.phone_number);
           localStorage.setItem('name', resData.data.name);
+          sessionStorage.setItem('just_registered_welcome', welcomeName);
           if (setAuth) setAuth(true);
         }
-        navigate('/');
+        setTimeout(() => {
+          navigate('/');
+        }, 1200);
       } else {
         setError(resData.msg || 'Registration failed');
       }

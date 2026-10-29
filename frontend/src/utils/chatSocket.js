@@ -22,7 +22,8 @@ class ChatSocketManager {
       messageAck: new Set(),
       typing: new Set(),
       read: new Set(),
-      status: new Set()
+      status: new Set(),
+      badgeUpdate: new Set()
     };
     this.reconnectTimer = null;
     this.heartbeatInterval = null;
@@ -295,6 +296,10 @@ class ChatSocketManager {
       this.listeners.read.forEach((cb) => {
         try { cb(msg); } catch (e) {}
       });
+    } else if (msg.type === 'badge_update' || msg.type === 'notification') {
+      this.listeners.badgeUpdate.forEach((cb) => {
+        try { cb(msg); } catch (e) {}
+      });
     }
   }
 
@@ -317,6 +322,11 @@ class ChatSocketManager {
     this.listeners.status.add(cb);
     cb(this.isConnected ? 'connected' : 'disconnected');
     return () => this.listeners.status.delete(cb);
+  }
+
+  onBadgeUpdate(cb) {
+    this.listeners.badgeUpdate.add(cb);
+    return () => this.listeners.badgeUpdate.delete(cb);
   }
 
   notifyStatus(status) {

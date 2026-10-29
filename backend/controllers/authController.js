@@ -169,6 +169,20 @@ exports.signup = async (req, res) => {
         }
       }
 
+      // Notify Admins if new user is registered
+      try {
+        const { broadcastToAdmins } = require('../socket/chatSocket');
+        broadcastToAdmins({
+          type: 'badge_update',
+          event: 'new_user',
+          user: user_phone,
+          name: user_name,
+          title: 'New User Registered',
+          message: `🎉 New User Registered: ${user_name} (${user_phone})`,
+          timestamp: new Date().toISOString()
+        });
+      } catch (wsErr) {}
+
       // Prepare response data
       const jwtToken = jwt.sign(
         { phone: user_phone, name: user_name, role: 'user' },

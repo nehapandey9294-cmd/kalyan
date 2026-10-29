@@ -157,6 +157,17 @@ exports.submitFundRequest = async (req, res) => {
     }
 
     if (fundResult.affectedRows > 0) {
+      try {
+        const { broadcastToAdmins } = require('../socket/chatSocket');
+        broadcastToAdmins({
+          type: 'badge_update',
+          event: 'new_deposit',
+          user: phone,
+          amount: amtNum,
+          message: `New Fund Request: ₹${amtNum} from ${phone}`
+        });
+      } catch (wsErr) {}
+
       return res.json({
         success: '1',
         msg: 'Fund request submitted successfully! It will appear in your Deposit History for admin approval.'
@@ -281,6 +292,17 @@ exports.submitWithdrawRequest = async (req, res) => {
     );
 
     if (insertResult.affectedRows > 0) {
+      try {
+        const { broadcastToAdmins } = require('../socket/chatSocket');
+        broadcastToAdmins({
+          type: 'badge_update',
+          event: 'new_withdrawal',
+          user: targetPhone,
+          amount: points,
+          message: `New Withdrawal Request: ₹${points} from ${targetPhone}`
+        });
+      } catch (wsErr) {}
+
       return res.json({
         success: '1',
         msg: 'Withdraw Request Added Successfully!!',

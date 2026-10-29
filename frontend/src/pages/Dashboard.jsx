@@ -6,11 +6,23 @@ import api from '../utils/api';
 const Dashboard = () => {
   const [games, setGames] = useState([]);
   const [alertMsg, setAlertMsg] = useState('Welcome to Kalyan Matka! Place your bets wisely.');
+  const [welcomeToast, setWelcomeToast] = useState(null);
   const [sliderStatus, setSliderStatus] = useState('1');
   const [sliders, setSliders] = useState([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    try {
+      const justRegistered = sessionStorage.getItem('just_registered_welcome');
+      if (justRegistered) {
+        sessionStorage.removeItem('just_registered_welcome');
+        setWelcomeToast(`🎉 Welcome, ${justRegistered}! Your account has been registered successfully.`);
+        setTimeout(() => setWelcomeToast(null), 8000);
+      }
+    } catch (e) {}
+  }, []);
 
   const loadData = async () => {
     try {
@@ -117,6 +129,43 @@ const Dashboard = () => {
 
   return (
     <div style={{ maxWidth: '1080px', margin: '0 auto', padding: '16px 16px 32px' }}>
+      {/* Welcome Toast Notification on New User Registration */}
+      {welcomeToast && (
+        <div style={{
+          backgroundColor: '#065f46',
+          border: '1px solid #10b981',
+          color: '#ffffff',
+          borderRadius: '14px',
+          padding: '12px 18px',
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)',
+          animation: 'fadeIn 0.3s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Sparkles size={18} style={{ color: '#34d399', flexShrink: 0 }} />
+            <span style={{ fontSize: '0.92rem', fontWeight: '600' }}>{welcomeToast}</span>
+          </div>
+          <button
+            onClick={() => setWelcomeToast(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'rgba(255, 255, 255, 0.8)',
+              fontSize: '1.3rem',
+              cursor: 'pointer',
+              lineHeight: 1,
+              padding: '0 4px'
+            }}
+            title="Dismiss"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
       {/* Marquee Notice Banner */}
       {alertMsg && (
         <div style={{

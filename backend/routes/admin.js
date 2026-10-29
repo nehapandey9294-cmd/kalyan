@@ -11,6 +11,8 @@ router.post('/login', authController.adminLogin);
 // Admin Control endpoints (Protected with verifyAdmin)
 router.get('/metrics', verifyAdmin, adminController.getDashboardMetrics);
 router.get('/dashboard-metrics', verifyAdmin, adminController.getDashboardMetrics);
+router.get('/badge-counts', verifyAdmin, adminController.getBadgeCounts);
+router.get('/notifications/badge-counts', verifyAdmin, adminController.getBadgeCounts);
 
 router.get('/users', verifyAdmin, adminController.getUsers);
 router.post('/users/update', verifyAdmin, adminController.updateUser);

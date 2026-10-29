@@ -13,6 +13,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.webkit.PermissionRequest;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.SslErrorHandler;
 import android.webkit.ValueCallback;
@@ -28,6 +31,7 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -37,6 +41,8 @@ public class MainActivity extends AppCompatActivity {
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
     private ActivityResultLauncher<Intent> fileChooserLauncher;
+    private PermissionRequest pendingAudioPermissionRequest;
+    private ActivityResultLauncher<String> micPermissionLauncher;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -64,6 +70,35 @@ public class MainActivity extends AppCompatActivity {
                             }
                             filePathCallback.onReceiveValue(results);
                             filePathCallback = null;
+                        }
+                    }
+            );
+
+            // ✅ Register Microphone Permission Launcher for WebRTC & Audio
+            micPermissionLauncher = registerForActivityResult(
+                    new ActivityResultContracts.RequestPermission(),
+                    isGranted -> {
+                        if (pendingAudioPermissionRequest != null) {
+                            if (isGranted) {
+                                runOnUiThread(() -> {
+                                    try {
+                                        pendingAudioPermissionRequest.grant(pendingAudioPermissionRequest.getResources());
+                                    } catch (Exception e) {
+                                        e.printStackTrace();
+                                    }
+                                    pendingAudioPermissionRequest = null;
+                                });
+                            } else {
+                                runOnUiThread(() -> {
+                                    try {
+                                        pendingAudioPermissionRequest.deny();
+                                    } catch (Exception e) {
+                                        e.printStackTrace();
+                                    }
+                                    pendingAudioPermissionRequest = null;
+                                });
+                                Toast.makeText(MainActivity.this, "Microphone permission is required for voice features", Toast.LENGTH_SHORT).show();
+                            }
                         }
                     }
             );
@@ -318,6 +353,49 @@ public class MainActivity extends AppCompatActivity {
                         return false;
                     }
                     return true;
+                }
+
+                // ✅ Handle WebRTC & HTML5 Microphone / Audio Permissions
+                @Override
+                public void onPermissionRequest(final PermissionRequest request) {
+                    if (request == null) return;
+                    boolean requiresAudio = false;
+                    for (String r : request.getResources()) {
+                        if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) {
+                            requiresAudio = true;
+                            break;
+                        }
+                    }
+
+                    if (requiresAudio) {
+                        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO)
+                                == PackageManager.PERMISSION_GRANTED) {
+                            runOnUiThread(() -> {
+                                try {
+                                    request.grant(request.getResources());
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                }
+                            });
+                        } else {
+                            pendingAudioPermissionRequest = request;
+                            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
+                        }
+                    } else {
+                        runOnUiThread(() -> {
+                            try {
+                                request.grant(request.getResources());
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        });
+                    }
+                }
+
+                @Override
+                public void onPermissionRequestCanceled(PermissionRequest request) {
+                    super.onPermissionRequestCanceled(request);
+                    pendingAudioPermissionRequest = null;
                 }
 
                 @Override
