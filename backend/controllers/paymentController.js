@@ -146,6 +146,14 @@ async function initUpiSchema() {
     const [debugSettings] = await db.query('SELECT id, deposit_mode, payment_upi_id, upi_payment_id, auto_upi_id FROM admin_settings LIMIT 1');
     console.log('[DEBUG admin_settings]:', debugSettings && debugSettings[0]);
 
+    // Clean up ghost unconfirmed intent requests created merely by clicking Pay Now (txt_id = '0' and status = '0')
+    try {
+      await db.query("DELETE FROM user_auto_deposite WHERE txt_id = '0' AND status = '0' AND txt_request LIKE 'UPI_%'");
+      await db.query("DELETE FROM user_fund_request WHERE status = '0' AND trans_details LIKE 'Auto UPI%Order: UPI_%' AND trans_details NOT LIKE '%UTR:%'");
+    } catch (cleanErr) {
+      console.warn('Ghost request cleanup notice:', cleanErr.message);
+    }
+
     isInitialized = true;
   } catch (err) {
     console.error('Error initializing upi_gateways schema:', err.message);
@@ -609,23 +617,8 @@ exports.createOrder = async (req, res) => {
     const orderId = `UPI_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
     const todayDateTime = getISTDateTimeStr();
 
-    // Create pending record in user_auto_deposite (status '0' = PENDING)
-    await db.query(
-      `INSERT INTO user_auto_deposite (username, transaction_note, amount, txt_request, txt_id, txt_date, status)
-       VALUES (?, ?, ?, ?, '0', ?, '0')`,
-      [phone, `Deposit via ${targetAppName}`, numAmount, orderId, todayDateTime]
-    );
-
-    // Also record in user_fund_request with status '0' (Pending) so Admin sees it in Fund Request tab
-    try {
-      await db.query(
-        `INSERT INTO user_fund_request (username, points, amount, trans_details, receipe_image, date, status, action)
-         VALUES (?, ?, ?, ?, '', ?, '0', '')`,
-        [phone, numAmount, numAmount, `Auto UPI (${targetAppName}) - Order: ${orderId}`, getISTDateStr()]
-      );
-    } catch (frErr) {
-      console.warn('user_fund_request insert in createOrder warning:', frErr.message);
-    }
+    // NOTE: Do NOT insert pending record into user_auto_deposite or user_fund_request here!
+    // A payment request should ONLY reach Admin when the user has actually sent payment and submitted UTR.
 
     const urls = buildUpiUri(targetAppCode, targetUpiId, targetPayee, numAmount, orderId);
 
@@ -768,43 +761,30 @@ exports.submitUpiFundRequest = async (req, res) => {
       [phone, amtNum, amtNum, trans_details, receipe_image, currentDateStr]
     );
 
-    // 2. If matching order_id in user_auto_deposite exists, update txt_id with UTR
-    if (order_id) {
-      const cleanPhone = String(phone || '').replace(/\D/g, '').slice(-10);
-      try {
-        await db.query(
+    // 2. Insert or update user_auto_deposite so Admin sees it in Auto Deposit tab
+    const todayDateTime = getISTDateTimeStr();
+    const autoNote = `Auto UPI (${upi_app || 'UPI App'}) | UTR: ${cleanUtr}`;
+    const txtReq = order_id || `UPI_${cleanUtr}`;
+    const cleanPhone = String(phone || '').replace(/\D/g, '').slice(-10);
+
+    try {
+      let updated = false;
+      if (order_id) {
+        const [upd] = await db.query(
           `UPDATE user_auto_deposite SET txt_id = ?, transaction_note = CONCAT(transaction_note, ' | UTR: ', ?) WHERE txt_request = ? AND (username = ? OR RIGHT(username, 10) = ?)`,
           [cleanUtr, cleanUtr, order_id, phone, cleanPhone || phone]
         );
-      } catch (depErr) {
-        console.warn('Could not update txt_id directly, fallback to updating transaction_note:', depErr.message);
-        try {
-          await db.query(
-            `UPDATE user_auto_deposite SET transaction_note = CONCAT(transaction_note, ' | UTR: ', ?) WHERE txt_request = ? AND (username = ? OR RIGHT(username, 10) = ?)`,
-            [cleanUtr, order_id, phone, cleanPhone || phone]
-          );
-        } catch (noteErr) {
-          console.warn('Fallback update transaction_note error:', noteErr.message);
-        }
+        if (upd.affectedRows > 0) updated = true;
       }
-    } else {
-      // Direct deposit without prior order_id
-      const todayDateTime = getISTDateTimeStr();
-      try {
+      if (!updated) {
         await db.query(
           `INSERT INTO user_auto_deposite (username, transaction_note, amount, txt_request, txt_id, txt_date, status)
            VALUES (?, ?, ?, ?, ?, ?, '0')`,
-          [phone, `Fund Request | UTR: ${cleanUtr}`, amtNum, cleanUtr, cleanUtr, todayDateTime]
+          [phone, autoNote, amtNum, txtReq, cleanUtr, todayDateTime]
         );
-      } catch (insErr) {
-        try {
-          await db.query(
-            `INSERT INTO user_auto_deposite (username, transaction_note, amount, txt_request, txt_id, txt_date, status)
-             VALUES (?, ?, ?, ?, '0', ?, '0')`,
-            [phone, `Fund Request | UTR: ${cleanUtr}`, amtNum, cleanUtr, todayDateTime]
-          );
-        } catch (innerIns) {}
       }
+    } catch (depErr) {
+      console.warn('user_auto_deposite update/insert error in submitUpiFundRequest:', depErr.message);
     }
 
     return res.json({
@@ -917,12 +897,40 @@ exports.verifyPayment = async (req, res) => {
       } catch (e) {}
     }
 
-    // 4. Stays PENDING Admin approval - DOES NOT credit wallet automatically!
+    // 4. Check if a real pending deposit request was submitted with UTR
+    const [pendingAuto] = await db.query(
+      `SELECT * FROM user_auto_deposite 
+       WHERE (txt_request = ? OR txt_id = ? OR transaction_note LIKE ?) 
+         AND (username = ? OR RIGHT(username, 10) = ?) 
+         AND status = '0' 
+       LIMIT 1`,
+      [order_id || refId, refId, `%${refId}%`, phone, cleanPhone || phone]
+    );
+
+    const [pendingFund] = await db.query(
+      `SELECT * FROM user_fund_request 
+       WHERE trans_details LIKE ? 
+         AND (username = ? OR RIGHT(username, 10) = ?) 
+         AND status = '0' 
+       LIMIT 1`,
+      [`%${order_id || refId}%`, phone, cleanPhone || phone]
+    );
+
+    if (pendingAuto.length > 0 || pendingFund.length > 0) {
+      return res.json({
+        success: '0',
+        pending: true,
+        status: '0',
+        msg: 'Payment request received! It is currently PENDING Admin approval. Points will be credited once Admin verifies.'
+      });
+    }
+
+    // 5. Not submitted yet
     return res.json({
       success: '0',
-      pending: true,
-      status: '0',
-      msg: 'Payment request received! It is currently PENDING Admin approval. Points will be credited once Admin verifies.'
+      pending: false,
+      not_submitted: true,
+      msg: 'No deposit request submitted yet. If you have sent payment, please enter your 12-digit UTR to submit for Admin approval.'
     });
   } catch (err) {
     console.error('verifyPayment error:', err);

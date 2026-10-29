@@ -380,7 +380,7 @@ public class MainActivity extends AppCompatActivity {
             // =====================================================
             // ✅ LOAD WEBSITE
             // =====================================================
-            webView.loadUrl("https://app.gama567.biz/");
+            webView.loadUrl("https://user-and-admin.onrender.com/");
         } catch (Throwable t) {
             t.printStackTrace();
             Toast.makeText(this, "Error starting app: " + t.getLocalizedMessage(), Toast.LENGTH_LONG).show();

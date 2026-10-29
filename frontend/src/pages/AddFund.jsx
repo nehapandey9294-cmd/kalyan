@@ -377,7 +377,7 @@ const AddFund = () => {
           msg: res.data.msg || `₹${targetOrder.amount} has been successfully added to your wallet!`
         });
       } else if (res.data?.pending || res.data?.status === '0') {
-        // PENDING Admin approval: Clear active order and show Pending screen
+        // PENDING Admin approval (only when user has actually submitted UTR)
         try {
           sessionStorage.removeItem('pending_upi_order');
         } catch (e) { }
@@ -396,14 +396,20 @@ const AddFund = () => {
           dateFormatted: `${dateStr}, ${timeStr}`,
           msg: res.data.msg || 'Deposit request submitted successfully! It is currently PENDING Admin approval.'
         });
+      } else if (res.data?.rejected) {
+        setError(res.data?.msg || 'Your deposit request was declined by Admin.');
       } else {
-        // Other error or rejection
-        setError(res.data?.msg || 'Payment request is pending Admin verification.');
+        // Not submitted yet: prompt user to enter 12-digit UTR reference number
+        setShowManualSection(true);
+        setError('');
+        if (utrInputRef.current) {
+          utrInputRef.current.focus();
+        }
       }
     } catch (err) {
       console.error('Verify payment error:', err);
       const serverMsg = err.response?.data?.msg || err.response?.data?.error;
-      setError(serverMsg || 'Verification check in progress. Please click "Verify Now" or submit UTR.');
+      setError(serverMsg || 'Verification check in progress. Please enter your 12-digit UTR below.');
     } finally {
       setVerifying(false);
       isVerifyingRef.current = false;
@@ -414,20 +420,21 @@ const AddFund = () => {
   useEffect(() => {
     const handleReturn = () => {
       if (document.visibilityState === 'visible' && activeOrderRef.current && !isVerifyingRef.current) {
-        const elapsed = Date.now() - (launchTimeRef.current || 0);
-        // Only trigger if at least 2.5 seconds have elapsed since launching UPI app
-        if (elapsed >= 2500) {
-          callVerifyPayment(activeOrderRef.current);
-        }
+        // When user returns from UPI app:
+        // Do NOT auto-submit fake requests to Admin!
+        // Instead, open the UTR input and focus it so user can enter the 12-digit UTR
+        setShowManualSection(true);
+        setTimeout(() => {
+          if (utrInputRef.current) {
+            utrInputRef.current.focus();
+          }
+        }, 300);
       }
     };
 
     const handleFocus = () => {
       if (activeOrderRef.current && !isVerifyingRef.current) {
-        const elapsed = Date.now() - (launchTimeRef.current || 0);
-        if (elapsed >= 2500) {
-          callVerifyPayment(activeOrderRef.current);
-        }
+        setShowManualSection(true);
       }
     };
 
@@ -440,15 +447,12 @@ const AddFund = () => {
       if (savedPending) {
         const parsed = JSON.parse(savedPending);
         const elapsed = Date.now() - (parsed.launchTime || 0);
-        // If order was created in last 15 minutes, auto resume and verify
+        // If order was created in last 15 minutes, auto resume
         if (elapsed < 15 * 60 * 1000) {
           setActiveOrder(parsed);
           activeOrderRef.current = parsed;
           launchTimeRef.current = parsed.launchTime;
-          // Auto verify once component mounts
-          setTimeout(() => {
-            callVerifyPayment(parsed);
-          }, 800);
+          setShowManualSection(true);
         } else {
           sessionStorage.removeItem('pending_upi_order');
         }
@@ -506,6 +510,7 @@ const AddFund = () => {
       launchTimeRef.current = now;
       activeOrderRef.current = orderData;
       setActiveOrder(orderData);
+      setShowManualSection(true);
 
       // Save to sessionStorage for background tab survival
       try {
@@ -1212,7 +1217,7 @@ const AddFund = () => {
             </h4>
 
             <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.9rem', maxWidth: '420px', marginInline: 'auto' }}>
-              Complete the payment in your UPI app. Your deposit request will remain PENDING until verified and approved by Admin.
+              1. Complete payment in your UPI app. 2. Enter the 12-digit UTR reference number below to submit your request for Admin verification.
             </p>
           </div>
 
@@ -1250,18 +1255,29 @@ const AddFund = () => {
               fontSize: '0.84rem'
             }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block', boxShadow: '0 0 8px #10b981' }} />
-              <span>Listening for return from your UPI app...</span>
+              <span>After paying in UPI app, enter your 12-digit UTR below</span>
             </div>
           )}
 
           {/* Primary Action Buttons */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
 
-            {/* MANUAL VERIFY BUTTON */}
+            {/* MANUAL VERIFY / SUBMIT BUTTON */}
             <button
               type="button"
-              disabled={verifying}
-              onClick={() => callVerifyPayment(activeOrder)}
+              disabled={verifying || submittingUtr}
+              onClick={(e) => {
+                if (utrNo && utrNo.length === 12) {
+                  handleSubmitUtr(e, 'active');
+                } else {
+                  setShowManualSection(true);
+                  setUtrError('Please enter your 12-digit UTR reference number from PhonePe/GooglePay to submit your deposit request.');
+                  if (utrInputRef.current) {
+                    utrInputRef.current.focus();
+                    utrInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+                }
+              }}
               className="btn-gold"
               style={{
                 width: '100%',
@@ -1277,15 +1293,15 @@ const AddFund = () => {
                 boxShadow: '0 6px 20px rgba(214, 190, 102, 0.35)'
               }}
             >
-              {verifying ? (
+              {submittingUtr ? (
                 <>
                   <RefreshCw size={18} className="animate-spin" />
-                  <span>VERIFYING PAYMENT...</span>
+                  <span>SUBMITTING DEPOSIT REQUEST...</span>
                 </>
               ) : (
                 <>
                   <CheckCircle2 size={18} />
-                  <span>I HAVE PAID — SUBMIT FOR ADMIN APPROVAL</span>
+                  <span>I HAVE PAID — SUBMIT UTR FOR ADMIN APPROVAL</span>
                 </>
               )}
             </button>
