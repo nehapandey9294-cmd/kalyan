@@ -99,7 +99,7 @@ exports.getLandingInfo = async (req, res) => {
     const appName = 'Kalyan Matka';
 
     const rawLink = settings.app_link ? settings.app_link.trim() : '';
-    const appLink = (rawLink && rawLink !== '#' && rawLink !== '/api/download-apk') ? rawLink : 'apk/sara-777.apk';
+    const appLink = (rawLink && rawLink !== '#' && rawLink !== '/api/download-apk' && !rawLink.includes('sara-777.apk')) ? rawLink : 'apk/Kalyan-Matka.apk';
     const howToPlay = settings.how_to_play || '#';
     const mobile = contact.mobile || '';
     const wpMobile = contact.wp_mobile || contact.mobile || '';

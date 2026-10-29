@@ -6921,7 +6921,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                         </label>
                         <input
                           type="text"
-                          placeholder="https://yourdomain.com/sara777.apk"
+                          placeholder="https://yourdomain.com/apk/Kalyan-Matka.apk"
                           value={settingsData.app_link || ''}
                           onChange={(e) => setSettingsData({ ...settingsData, app_link: e.target.value })}
                           style={{ width: '100%', padding: '10px 14px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem' }}

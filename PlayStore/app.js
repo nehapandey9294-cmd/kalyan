@@ -4,13 +4,29 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. Install & Download Simulation
+  // 1. Install & Download
   const installBtn = document.getElementById('installBtn');
   const installText = document.getElementById('installText');
   let installState = 'idle'; // 'idle', 'downloading', 'installed'
 
+  function triggerDownload() {
+    const apkLink = document.createElement('a');
+    apkLink.href = 'Kalyan-Matka.apk';
+    apkLink.download = 'Kalyan-Matka.apk';
+    document.body.appendChild(apkLink);
+    apkLink.click();
+    setTimeout(() => {
+      if (document.body.contains(apkLink)) {
+        document.body.removeChild(apkLink);
+      }
+    }, 150);
+  }
+
   if (installBtn) {
     installBtn.addEventListener('click', () => {
+      // Trigger real APK download immediately on click
+      triggerDownload();
+
       if (installState === 'idle') {
         installState = 'downloading';
         installBtn.classList.add('installing');
@@ -21,11 +37,11 @@ document.addEventListener('DOMContentLoaded', () => {
           </svg>
           <span>Downloading 0%</span>
         `;
-        showToast('Download started for Kalyan Matka APK...');
+        showToast('Download started for Kalyan-Matka.apk...');
 
         let progress = 0;
         const progressInterval = setInterval(() => {
-          progress += Math.floor(Math.random() * 20) + 15;
+          progress += Math.floor(Math.random() * 25) + 20;
           if (progress >= 100) {
             progress = 100;
             clearInterval(progressInterval);
@@ -33,15 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
             installBtn.classList.remove('installing');
             installBtn.classList.add('installed');
             installText.textContent = 'Open';
-            showToast('✓ Kalyan Matka installed successfully!');
-
-            // Trigger real APK download
-            const apkLink = document.createElement('a');
-            apkLink.href = '/public/apk/app-release.apk';
-            apkLink.download = 'sara-777.apk';
-            document.body.appendChild(apkLink);
-            apkLink.click();
-            document.body.removeChild(apkLink);
+            showToast('✓ Kalyan-Matka.apk downloaded successfully!');
           } else {
             installText.innerHTML = `
               <svg class="gp-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="animation: spin 1s linear infinite;">
@@ -51,10 +59,10 @@ document.addEventListener('DOMContentLoaded', () => {
               <span>Downloading ${progress}%</span>
             `;
           }
-        }, 350);
+        }, 250);
       } else if (installState === 'installed') {
-        showToast('Opening Kalyan Matka App...');
-        window.open('/', '_blank');
+        showToast('Downloading Kalyan-Matka.apk again...');
+        triggerDownload();
       }
     });
   }

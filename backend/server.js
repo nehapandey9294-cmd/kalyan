@@ -22,28 +22,66 @@ const localUploads = path.join(__dirname, 'uploads');
 if (!fs.existsSync(localUploads)) fs.mkdirSync(localUploads, { recursive: true });
 app.use('/uploads', express.static(localUploads));
 
+// Auto-sync Kalyan-Matka.apk to PlayStore, landing, and backend folders
+try {
+  const rootDir = path.join(__dirname, '..');
+  const srcApk = path.join(rootDir, 'Application', 'app', 'release', 'app-release.apk');
+  if (fs.existsSync(srcApk)) {
+    const targets = [
+      path.join(rootDir, 'PlayStore', 'Kalyan-Matka.apk'),
+      path.join(rootDir, 'PlayStore', 'apk', 'Kalyan-Matka.apk'),
+      path.join(rootDir, 'landing', 'apk', 'Kalyan-Matka.apk'),
+      path.join(rootDir, 'landing', 'public', 'apk', 'Kalyan-Matka.apk'),
+      path.join(__dirname, 'uploads', 'Kalyan-Matka.apk'),
+      path.join(rootDir, 'Application', 'app', 'release', 'Kalyan-Matka.apk')
+    ];
+    targets.forEach(tgt => {
+      const dir = path.dirname(tgt);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      if (!fs.existsSync(tgt) || fs.statSync(tgt).size !== fs.statSync(srcApk).size) {
+        fs.copyFileSync(srcApk, tgt);
+        console.log(`[APK Sync] Copied APK -> ${tgt}`);
+      }
+    });
+  }
+} catch (err) {
+  console.error('[APK Sync Error]:', err.message);
+}
+
 // Serve APK files with direct attachment & cache headers for instant download
 const apkStaticOptions = {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.apk')) {
+      const fileName = path.basename(filePath);
       res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-      res.setHeader('Content-Disposition', 'attachment; filename="sara-777.apk"');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
       res.setHeader('Cache-Control', 'public, max-age=86400');
     }
   }
 };
+app.use('/apk', express.static(path.join(__dirname, '..', 'PlayStore', 'apk'), apkStaticOptions));
 app.use('/apk', express.static(path.join(__dirname, '..', 'landing', 'public', 'apk'), apkStaticOptions));
 app.use('/apk', express.static(path.join(__dirname, '..', 'landing', 'apk'), apkStaticOptions));
+app.use('/PlayStore', express.static(path.join(__dirname, '..', 'PlayStore'), apkStaticOptions));
 
 app.get('/api/download-apk', (req, res) => {
-  const apkPath = path.join(__dirname, '..', 'landing', 'public', 'apk', 'sara-777.apk');
-  const fallbackPath = path.join(__dirname, '..', 'landing', 'apk', 'sara-777.apk');
-  const targetApk = fs.existsSync(apkPath) ? apkPath : (fs.existsSync(fallbackPath) ? fallbackPath : null);
+  const possiblePaths = [
+    path.join(__dirname, '..', 'PlayStore', 'Kalyan-Matka.apk'),
+    path.join(__dirname, '..', 'PlayStore', 'apk', 'Kalyan-Matka.apk'),
+    path.join(__dirname, '..', 'landing', 'apk', 'Kalyan-Matka.apk'),
+    path.join(__dirname, '..', 'landing', 'public', 'apk', 'Kalyan-Matka.apk'),
+    path.join(__dirname, 'uploads', 'Kalyan-Matka.apk'),
+    path.join(__dirname, '..', 'Application', 'app', 'release', 'Kalyan-Matka.apk'),
+    path.join(__dirname, '..', 'Application', 'app', 'release', 'app-release.apk'),
+    path.join(__dirname, '..', 'landing', 'apk', 'sara-777.apk')
+  ];
+
+  const targetApk = possiblePaths.find(p => fs.existsSync(p));
 
   if (targetApk) {
     res.setHeader('Content-Type', 'application/vnd.android.package-archive');
     res.setHeader('Cache-Control', 'public, max-age=86400');
-    return res.download(targetApk, 'sara-777.apk');
+    return res.download(targetApk, 'Kalyan-Matka.apk');
   } else {
     return res.status(404).json({ success: '0', msg: 'APK file not found' });
   }
