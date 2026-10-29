@@ -1,6 +1,6 @@
 # Sara 777 - Google Play Store UI
 
-End-to-end pixel-perfect Google Play Store replica for **Sara 777** (`Sara777.quizzes`).
+End-to-end pixel-perfect Google Play Store replica for **Sara 777** (`com.saraquiz.saraapps`).
 
 ---
 
@@ -34,7 +34,7 @@ npx live-server --port=5174
 2. **App Hero Section**:
    - Title: `KALYAN SATTA MATKA PLAY ONLINE`
    - Developer: `ML Tech Solutions` (Google Play green `#01875f`)
-   - Rating & Stats: `3.1 ★` (81 reviews) | `50K+` (Downloads)
+   - Rating & Stats: `4.8 ★` (1.4K reviews) | `50K+` (Downloads)
    - Interactive **Install** button with simulated live download progress (0% -> 100%) and automatic APK download trigger
    - **Share** dialog with direct URL copy & WhatsApp sharing
    - **Add to wishlist** toggle button

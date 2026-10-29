@@ -5,7 +5,7 @@ import api from '../utils/api';
 
 const Dashboard = () => {
   const [games, setGames] = useState([]);
-  const [alertMsg, setAlertMsg] = useState('Welcome to Sara 777! Place your bets wisely.');
+  const [alertMsg, setAlertMsg] = useState('Welcome to Kalyan Matka! Place your bets wisely.');
   const [sliderStatus, setSliderStatus] = useState('1');
   const [sliders, setSliders] = useState([]);
   const [currentSlide, setCurrentSlide] = useState(0);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { User, Phone, Lock, KeyRound, Mail, Gift, Eye, EyeOff, MessageCircle, ShieldCheck } from 'lucide-react';
+import { User, Phone, Lock, KeyRound, Mail, Gift, Eye, EyeOff, Headphones, ShieldCheck } from 'lucide-react';
 import api from '../utils/api';
 
 const Signup = ({ setAuth }) => {
@@ -17,7 +17,7 @@ const Signup = ({ setAuth }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const [appName, setAppName] = useState('Sara 777');
+  const [appName, setAppName] = useState('Kalyan Matka');
   const [wpNumber, setWpNumber] = useState('');
   const [referralStatus, setReferralStatus] = useState('1');
   const [themeColor, setThemeColor] = useState(() => localStorage.getItem('auth_theme_color') || 'gold');
@@ -101,11 +101,6 @@ const Signup = ({ setAuth }) => {
     }
   };
 
-  const cleanWpNumber = wpNumber.replace(/\D/g, '');
-  const whatsappUrl = cleanWpNumber 
-    ? `https://wa.me/${cleanWpNumber.length === 10 ? '91' + cleanWpNumber : cleanWpNumber}?text=${encodeURIComponent(`Hello ${appName} Support, I need help registering my new account.`)}`
-    : `https://wa.me/?text=${encodeURIComponent(`Hello ${appName} Support, I need help registering my new account.`)}`;
-
   return (
     <div className={`auth-page-bg auth-theme-${themeColor}`}>
       {/* Background Ambient Orbs */}
@@ -159,7 +154,7 @@ const Signup = ({ setAuth }) => {
                   objectFit: 'contain',
                   filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))'
                 }}
-                onError={(e) => { e.target.src = '/img/lucky-matka-logo.png'; }}
+                onError={(e) => { e.target.src = '/img/logo.png'; }}
               />
             </div>
             <h2 className={`auth-heading-gradient-${themeColor}`} style={{ fontSize: '1.9rem', marginBottom: '4px', fontWeight: '800', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
@@ -315,17 +310,21 @@ const Signup = ({ setAuth }) => {
             </button>
           </form>
 
-          {/* WhatsApp Support Section inside Card */}
+          {/* Live Support Chat Link */}
           <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-            <a 
-              href={whatsappUrl} 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="btn-whatsapp"
+            <Link 
+              to="/support" 
+              className="btn-support-chat"
+              style={{
+                background: 'linear-gradient(135deg, rgba(214, 190, 102, 0.22) 0%, rgba(16, 185, 129, 0.22) 100%)',
+                border: '1px solid rgba(214, 190, 102, 0.4)',
+                color: '#ffffff',
+                textDecoration: 'none'
+              }}
             >
-              <MessageCircle size={20} fill="#ffffff" />
-              <span>WhatsApp Support</span>
-            </a>
+              <Headphones size={20} />
+              <span>Live Support Chat</span>
+            </Link>
           </div>
 
           <div style={{ marginTop: '18px', textAlign: 'center', color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.9rem' }}>

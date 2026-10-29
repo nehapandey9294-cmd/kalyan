@@ -1,7 +1,7 @@
 {
   "name": "sara777-backend",
   "version": "1.0.0",
-  "description": "Backend API server for Sara 777 web app",
+  "description": "Backend API server for Kalyan Matka web app",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

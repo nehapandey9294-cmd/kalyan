@@ -1,4 +1,4 @@
-package Sara777.quizzes;
+package saraquiz.saraapps;
 
 import org.junit.Test;
 

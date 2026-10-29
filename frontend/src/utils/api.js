@@ -12,6 +12,9 @@ const getBaseURL = () => {
     if (host.includes('airoapp.ai')) {
       return 'https://ww7ncvv5bk.c24.airoapp.ai/api';
     }
+    if (host.includes('gama567.biz')) {
+      return `${window.location.origin}/api`;
+    }
     return `${window.location.origin}/api`;
   }
   return 'http://localhost:5001/api';

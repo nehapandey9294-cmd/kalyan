@@ -425,12 +425,14 @@ const WalletPage = () => {
 
           <div className="card-glass-v2">
             <h3 style={{ color: '#fff', fontSize: '1.1rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700' }}>
-              <MessageCircle size={20} style={{ color: '#25D366' }} /> Support Helpline
+              <MessageCircle size={20} style={{ color: '#10b981' }} /> Live Chat & Support
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.92rem' }}>
               <p style={{ margin: 0 }}>For deposit or withdrawal inquiries, contact us:</p>
-              {walletInfo?.admin_mobile && <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}><PhoneCall size={14} /> Mobile: <strong>{walletInfo.admin_mobile}</strong></p>}
-              {walletInfo?.admin_wp && <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}><MessageCircle size={14} style={{ color: '#25D366' }} /> WhatsApp: <strong>{walletInfo.admin_wp}</strong></p>}
+              {walletInfo?.admin_mobile && <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}><PhoneCall size={14} /> Helpline: <strong>{walletInfo.admin_mobile}</strong></p>}
+              <Link to="/support" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginTop: '6px', background: 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', padding: '10px 16px', borderRadius: '10px', textDecoration: 'none', fontWeight: 600, width: 'fit-content' }}>
+                <MessageCircle size={16} /> Open Live Support Chat
+              </Link>
             </div>
           </div>
         </div>

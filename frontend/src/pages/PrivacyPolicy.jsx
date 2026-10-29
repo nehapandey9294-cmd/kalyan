@@ -5,9 +5,9 @@ import api from '../utils/api';
 
 const PrivacyPolicy = () => {
   const navigate = useNavigate();
-  const [appName, setAppName] = useState('Sara 777');
-  const [contactEmail, setContactEmail] = useState('support@sara777.com');
+  const [appName, setAppName] = useState('Kalyan Matka');
   const [contactMobile, setContactMobile] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
   const [dataDeletionUrl, setDataDeletionUrl] = useState('/data-deletion');
 
   useEffect(() => {
@@ -17,8 +17,9 @@ const PrivacyPolicy = () => {
         if (res.data.data.app_name) setAppName(res.data.data.app_name);
         if (res.data.data.mobile) setContactMobile(res.data.data.mobile);
         if (res.data.data.data_deletion_url) setDataDeletionUrl(res.data.data.data_deletion_url);
+        if (res.data.data.email) setContactEmail(res.data.data.email);
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   return (
@@ -32,7 +33,7 @@ const PrivacyPolicy = () => {
       background: 'radial-gradient(circle at top right, rgba(214, 190, 102, 0.12) 0%, transparent 60%), #09121f'
     }}>
       <div style={{ maxWidth: '840px', margin: '0 auto' }}>
-        
+
         {/* Navigation / Header Bar */}
         <div style={{
           display: 'flex',
@@ -123,7 +124,7 @@ const PrivacyPolicy = () => {
             color: '#d6be66',
             fontWeight: '600'
           }}>
-            {appName} (Package: Sara777.quizzes)
+            {appName} (Package: com.saraquiz.saraapps)
           </p>
           <div style={{
             display: 'inline-flex',
@@ -159,7 +160,7 @@ const PrivacyPolicy = () => {
               1. Introduction & Overview
             </h2>
             <p>
-              Welcome to <strong>{appName}</strong> ("we", "our", or "us"). We are committed to protecting your privacy and ensuring your personal information is treated with transparency, dignity, and high security. This Privacy Policy governs your use of our mobile application (Android Package: <code>Sara777.quizzes</code>) and associated web services.
+              Welcome to <strong>{appName}</strong> ("we", "our", or "us"). We are committed to protecting your privacy and ensuring your personal information is treated with transparency, dignity, and high security. This Privacy Policy governs your use of our mobile application (Android Package: <code>com.saraquiz.saraapps</code>) and associated web services.
             </p>
             <p>
               By accessing or using our application, you acknowledge that you have read, understood, and agree to the collection and use of your information in accordance with this policy.
@@ -268,7 +269,7 @@ const PrivacyPolicy = () => {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Mail size={16} style={{ color: '#d6be66' }} />
-                <span>Email Support: <strong>{contactEmail}</strong></span>
+                <span>Email Support: <a href={`mailto:${contactEmail || 'support@saraquiz.com'}`} style={{ color: '#d6be66', textDecoration: 'none', fontWeight: '700' }}>{contactEmail || 'support@saraquiz.com'}</a></span>
               </div>
               {contactMobile && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

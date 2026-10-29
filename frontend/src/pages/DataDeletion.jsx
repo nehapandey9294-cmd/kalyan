@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Trash2, ArrowLeft, ShieldAlert, CheckCircle, AlertCircle, Phone, Mail, HelpCircle, ShieldCheck } from 'lucide-react';
+import { Trash2, ArrowLeft, ShieldAlert, CheckCircle, AlertCircle, Phone, Mail, HelpCircle, ShieldCheck, Headphones } from 'lucide-react';
 import api from '../utils/api';
 
 const DataDeletion = () => {
   const navigate = useNavigate();
-  const [appName, setAppName] = useState('Sara 777');
+  const [appName, setAppName] = useState('Kalyan Matka');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [reason, setReason] = useState('I want to close my account');
@@ -63,10 +63,7 @@ const DataDeletion = () => {
     }
   };
 
-  const cleanWp = wpNumber.replace(/\D/g, '');
-  const whatsappUrl = cleanWp
-    ? `https://wa.me/${cleanWp.length === 10 ? '91' + cleanWp : cleanWp}?text=${encodeURIComponent(`Hello ${appName} Support, I request to delete my account and associated data for phone number: ${phone}`)}`
-    : '#';
+
 
   return (
     <div style={{
@@ -165,7 +162,7 @@ const DataDeletion = () => {
             color: '#f87171',
             fontWeight: '600'
           }}>
-            {appName} • Package: Sara777.quizzes
+            {appName} • Package: com.saraquiz.saraapps
           </p>
           <div style={{
             display: 'inline-flex',
@@ -403,30 +400,26 @@ const DataDeletion = () => {
             </button>
           </form>
 
-          {/* Instant WhatsApp Support Alternative */}
-          {cleanWp && (
-            <div style={{ marginTop: '22px', textAlign: 'center', paddingTop: '18px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-              <p style={{ margin: '0 0 10px 0', fontSize: '0.84rem', color: 'rgba(255, 255, 255, 0.7)' }}>
-                Need urgent assistance or direct confirmation?
-              </p>
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  color: '#25D366',
-                  textDecoration: 'none',
-                  fontSize: '0.88rem',
-                  fontWeight: '700'
-                }}
-              >
-                <Phone size={15} /> Chat with {appName} Support on WhatsApp
-              </a>
-            </div>
-          )}
+          {/* In-App Live Support Alternative */}
+          <div style={{ marginTop: '22px', textAlign: 'center', paddingTop: '18px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <p style={{ margin: '0 0 10px 0', fontSize: '0.84rem', color: 'rgba(255, 255, 255, 0.7)' }}>
+              Need urgent assistance or direct confirmation?
+            </p>
+            <Link
+              to="/support"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: 'var(--color-gold, #d6be66)',
+                textDecoration: 'none',
+                fontSize: '0.88rem',
+                fontWeight: '700'
+              }}
+            >
+              <Headphones size={15} /> Chat with {appName} Live Support
+            </Link>
+          </div>
         </div>
 
         {/* Footer info */}

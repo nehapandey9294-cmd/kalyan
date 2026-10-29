@@ -3,6 +3,9 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
+const http = require('http');
+const server = http.createServer(app);
+const { initChatSocket } = require('./socket/chatSocket');
 const PORT = process.env.PORT || 5000;
 
 // Enable CORS for frontend integration
@@ -12,10 +15,12 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Static directory for uploaded screenshots and landing website
 const path = require('path');
 const fs = require('fs');
 app.use('/uploads', express.static(path.join(__dirname, '..', '_public_html (1)', 'uploads')));
+const localUploads = path.join(__dirname, 'uploads');
+if (!fs.existsSync(localUploads)) fs.mkdirSync(localUploads, { recursive: true });
+app.use('/uploads', express.static(localUploads));
 
 // Serve APK files with direct attachment & cache headers for instant download
 const apkStaticOptions = {
@@ -64,12 +69,44 @@ app.use('/img', express.static(path.join(__dirname, '..', 'frontend', 'public', 
 
 
 
+try {
+  const uploadedLogo = '/Users/anilrathore/.gemini/antigravity-ide/brain/1cbfdef8-9fd8-4275-8907-5f43353f6735/.user_uploaded/media_1793204473300.jpg';
+  const landingImgDir = path.join(__dirname, '..', 'landing', 'img');
+  const logoSrc = path.join(landingImgDir, 'logo.png');
+  const favDest = path.join(landingImgDir, 'fav.png');
+  if (fs.existsSync(uploadedLogo)) {
+    try { fs.copyFileSync(uploadedLogo, logoSrc); } catch (e) {}
+  }
+  if (fs.existsSync(logoSrc)) {
+    fs.copyFileSync(logoSrc, favDest);
+    try { fs.copyFileSync(logoSrc, path.join(landingImgDir, 'tara-baba-logo.png')); } catch (e) {}
+  }
+  const feImgDir = path.join(__dirname, '..', 'frontend', 'public', 'img');
+  if (fs.existsSync(logoSrc) && fs.existsSync(feImgDir)) {
+    fs.copyFileSync(logoSrc, path.join(feImgDir, 'fav.png'));
+    fs.copyFileSync(logoSrc, path.join(feImgDir, 'logo.png'));
+    fs.copyFileSync(logoSrc, path.join(feImgDir, 'logo.jpg'));
+    try { fs.copyFileSync(logoSrc, path.join(feImgDir, 'tara-baba-logo.png')); } catch (e) {}
+    try { fs.copyFileSync(logoSrc, path.join(feImgDir, 'lucky-matka-logo.png')); } catch (e) {}
+  }
+  const feAssetsImg = path.join(__dirname, '..', 'frontend', 'public', 'assets', 'images');
+  if (fs.existsSync(logoSrc) && fs.existsSync(feAssetsImg)) {
+    try { fs.copyFileSync(logoSrc, path.join(feAssetsImg, 'logo1.png')); } catch (e) {}
+  }
+  const playStoreAssets = path.join(__dirname, '..', 'PlayStore', 'assets');
+  if (fs.existsSync(logoSrc) && fs.existsSync(playStoreAssets)) {
+    try { fs.copyFileSync(logoSrc, path.join(playStoreAssets, 'logo.png')); } catch (e) {}
+  }
+} catch (e) {}
+
 // Routes
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
+const chatRoutes = require('./routes/chat');
 
 app.use('/api', apiRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Base route & Health check
 app.get('/health', (req, res) => {
@@ -93,7 +130,7 @@ if (fs.existsSync(frontendDistPath)) {
   });
 } else {
   app.get('/', (req, res) => {
-    res.json({ message: 'Sara 777 API Server is running!', health: '/api/health' });
+    res.json({ message: 'Kalyan Matka API Server is running!', health: '/api/health' });
   });
 }
 
@@ -103,6 +140,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: '0', msg: 'Something went wrong!', error: err.message });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+// Initialize WebSocket in-app chat module
+initChatSocket(server);
+
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT} (HTTP + WebSockets)`);
 });

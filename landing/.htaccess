@@ -1,0 +1,31 @@
+# =========================================================================
+# Sara 777 - Apache / cPanel Configuration (.htaccess)
+# Place this file in public_html on your live server
+# =========================================================================
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+
+# 1. Forward all /api/ requests to Node.js Backend Server (Port 5001)
+<IfModule mod_proxy.c>
+RewriteCond %{REQUEST_URI} ^/api/ [NC]
+RewriteRule ^api/(.*)$ http://127.0.0.1:5001/api/$1 [P,L]
+</IfModule>
+
+# 2. Prevent rewrite loop for existing files, images, CSS, JS, APK
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# 3. SPA Frontend Route Fallback (Only non-api requests go to index.html)
+RewriteCond %{REQUEST_URI} !^/api/ [NC]
+RewriteRule ^ index.html [L]
+</IfModule>
+
+# Enable CORS Headers for public API
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+</IfModule>

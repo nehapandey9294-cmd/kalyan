@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { HelpCircle, Trophy, CheckCircle2, XCircle, RotateCcw, Award, Zap, Brain, Sparkles, MessageCircle, LogOut } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { HelpCircle, Trophy, CheckCircle2, XCircle, RotateCcw, Award, Zap, Brain, Sparkles, Headphones, LogOut } from 'lucide-react';
 
 const QUIZ_QUESTIONS = [
   {
@@ -167,28 +168,24 @@ const QuizApp = ({ onLogout, wpNumber = '' }) => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {cleanWpNumber && (
-            <a
-              href={`https://wa.me/${cleanWpNumber}`}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                backgroundColor: 'rgba(34, 197, 94, 0.2)',
-                color: '#4ade80',
-                border: '1px solid rgba(34, 197, 94, 0.4)',
-                padding: '6px 12px',
-                borderRadius: '20px',
-                fontSize: '0.75rem',
-                fontWeight: '700',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                textDecoration: 'none'
-              }}
-            >
-              <MessageCircle size={14} /> Help
-            </a>
-          )}
+          <Link
+            to="/support"
+            style={{
+              backgroundColor: 'rgba(214, 190, 102, 0.2)',
+              color: 'var(--color-gold, #d6be66)',
+              border: '1px solid rgba(214, 190, 102, 0.4)',
+              padding: '6px 12px',
+              borderRadius: '20px',
+              fontSize: '0.75rem',
+              fontWeight: '700',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              textDecoration: 'none'
+            }}
+          >
+            <Headphones size={14} /> Live Support
+          </Link>
           {onLogout && (
             <button
               onClick={onLogout}

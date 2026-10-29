@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </svg>
           <span>Downloading 0%</span>
         `;
-        showToast('Download started for Sara 777 APK...');
+        showToast('Download started for Kalyan Matka APK...');
 
         let progress = 0;
         const progressInterval = setInterval(() => {
@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
             installBtn.classList.remove('installing');
             installBtn.classList.add('installed');
             installText.textContent = 'Open';
-            showToast('✓ Sara 777 installed successfully!');
+            showToast('✓ Kalyan Matka installed successfully!');
 
             // Trigger real APK download
             const apkLink = document.createElement('a');
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }, 350);
       } else if (installState === 'installed') {
-        showToast('Opening Sara 777 App...');
+        showToast('Opening Kalyan Matka App...');
         window.open('/', '_blank');
       }
     });

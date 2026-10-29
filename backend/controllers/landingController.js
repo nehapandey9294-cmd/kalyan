@@ -1,10 +1,49 @@
 const db = require('../config/db');
+const { getISTDate, getISTDateStr } = require('../utils/istDate');
 
-// Helper to get IST date (Asia/Kolkata UTC+5:30)
-function getISTDate() {
-  const now = new Date();
-  const istString = now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
-  return new Date(istString);
+// Helper to parse time string
+function getTodayTime(timeStr, refISTDate) {
+  if (!timeStr) return null;
+  const clean = String(timeStr).trim().toLowerCase();
+  const match = clean.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?$/);
+  if (!match) return null;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const seconds = match[3] ? parseInt(match[3], 10) : 0;
+  const modifier = match[4];
+  if (modifier === 'pm' && hours < 12) {
+    hours += 12;
+  } else if (modifier === 'am' && hours === 12) {
+    hours = 0;
+  }
+  const date = new Date(refISTDate);
+  date.setHours(hours, minutes, seconds, 0);
+  return date;
+}
+
+// Evaluate market open/close timing
+function evaluateGameTiming(openTimeStr, closeTimeStr, nowIST) {
+  const openTimeObj = getTodayTime(openTimeStr, nowIST);
+  const closeTimeObj = getTodayTime(closeTimeStr, nowIST);
+  if (!openTimeObj || !closeTimeObj || isNaN(openTimeObj.getTime()) || isNaN(closeTimeObj.getTime())) {
+    return { isWithinWindow: true, isOpenSessionActive: true };
+  }
+  if (closeTimeObj.getTime() <= openTimeObj.getTime()) {
+    if (nowIST.getTime() >= openTimeObj.getTime()) {
+      closeTimeObj.setDate(closeTimeObj.getDate() + 1);
+    } else {
+      const tempCloseToday = new Date(closeTimeObj);
+      if (nowIST.getTime() <= tempCloseToday.getTime()) {
+        openTimeObj.setDate(openTimeObj.getDate() - 1);
+        closeTimeObj.setTime(tempCloseToday.getTime());
+      } else {
+        closeTimeObj.setDate(closeTimeObj.getDate() + 1);
+      }
+    }
+  }
+  const isWithinWindow = nowIST.getTime() <= closeTimeObj.getTime();
+  const isOpenSessionActive = isWithinWindow && nowIST.getTime() < openTimeObj.getTime();
+  return { isWithinWindow, isOpenSessionActive };
 }
 
 // 1. Get Landing Page Info (Branding, App Link, How to Play, Notice, Contacts, Rates)
@@ -25,8 +64,21 @@ exports.getLandingInfo = async (req, res) => {
 
     let ratesRows = [];
     try {
-      const [r] = await db.query('SELECT * FROM game_rates');
-      ratesRows = r;
+      const [r] = await db.query('SELECT * FROM game_rates ORDER BY id ASC');
+      ratesRows = r.map((item, idx) => {
+        const minVal = Number(item.min_value) || 10;
+        const maxVal = Number(item.max_value) || 950;
+        const mult = (maxVal / minVal);
+        return {
+          id: item.id || (idx + 1),
+          type: item.type || `Game Type ${idx + 1}`,
+          name: item.type || `Game Type ${idx + 1}`,
+          min_value: minVal,
+          max_value: maxVal,
+          ratio: `${minVal} Ka ${maxVal}`,
+          multiplier: `${mult % 1 === 0 ? mult : mult.toFixed(1)}x`
+        };
+      });
     } catch (e) {
       ratesRows = [];
     }
@@ -40,19 +92,14 @@ exports.getLandingInfo = async (req, res) => {
         }
       } catch (e) {}
     }
-    if (!alertMessage) {
-      alertMessage = "Welcome to Sara 777! India's No.1 Live Matka Result Portal! Download our official app now.";
+    if (!alertMessage || alertMessage.includes('Tara Baba') || alertMessage.includes('Sara 777')) {
+      alertMessage = "Welcome to Kalyan Matka! India's No.1 Live Matka Result Portal! Download our official app now.";
     }
 
-    let appName = 'Sara 777';
-    if (settings.app_link && !settings.app_link.startsWith('http')) {
-      appName = settings.app_link;
-    } else if (settings.upi_name && !settings.upi_name.startsWith('http')) {
-      appName = settings.upi_name;
-    }
+    const appName = 'Kalyan Matka';
 
     const rawLink = settings.app_link ? settings.app_link.trim() : '';
-    const appLink = (rawLink && rawLink !== '#' && rawLink !== '/api/download-apk') ? rawLink : '/apk/sara-777.apk';
+    const appLink = (rawLink && rawLink !== '#' && rawLink !== '/api/download-apk') ? rawLink : 'apk/sara-777.apk';
     const howToPlay = settings.how_to_play || '#';
     const mobile = contact.mobile || '';
     const wpMobile = contact.wp_mobile || contact.mobile || '';
@@ -68,6 +115,7 @@ exports.getLandingInfo = async (req, res) => {
         alert_message: alertMessage,
         mobile: mobile,
         wp_mobile: wpMobile,
+        email: contact.email || 'support@saraquiz.com',
         privacy_policy_url: privacyPolicyUrl,
         data_deletion_url: dataDeletionUrl,
         rates: ratesRows
@@ -79,40 +127,76 @@ exports.getLandingInfo = async (req, res) => {
   }
 };
 
+// Public Game Rates
+exports.getLandingRates = async (req, res) => {
+  try {
+    const [r] = await db.query('SELECT * FROM game_rates ORDER BY id ASC');
+    const formatted = r.map((item, idx) => {
+      const minVal = Number(item.min_value) || 10;
+      const maxVal = Number(item.max_value) || 950;
+      const mult = (maxVal / minVal);
+      return {
+        id: item.id || (idx + 1),
+        type: item.type || `Rate ${idx + 1}`,
+        name: item.type || `Rate ${idx + 1}`,
+        min_value: minVal,
+        max_value: maxVal,
+        ratio: `${minVal} Ka ${maxVal}`,
+        multiplier: `${mult % 1 === 0 ? mult : mult.toFixed(1)}x`
+      };
+    });
+    return res.json({ success: '1', data: formatted });
+  } catch (err) {
+    return res.status(500).json({ success: '0', error: err.message });
+  }
+};
+
 // 2. Get All Markets with Today's Live Declared Results for Landing Page
 exports.getLandingMarkets = async (req, res) => {
   try {
     const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     const nowIST = getISTDate();
     const todayDayName = daysOfWeek[nowIST.getDay()];
+    const todayDateStr = getISTDateStr(nowIST);
 
-    const yyyy = nowIST.getFullYear();
-    const mm = String(nowIST.getMonth() + 1).padStart(2, '0');
-    const dd = String(nowIST.getDate()).padStart(2, '0');
-    const todayDateStr = `${yyyy}-${mm}-${dd}`;
-
-    // Step A: Get all distinct game names from game_time
+    // Step A: Get all distinct game names from game_time for today
     let gameRows = [];
     try {
       const [rows] = await db.query(
         `SELECT g1.* FROM game_time g1
          INNER JOIN (
-           SELECT MIN(id) as min_id FROM game_time GROUP BY game
+           SELECT game, MIN(id) as min_id FROM game_time WHERE LOWER(TRIM(day)) = LOWER(?) GROUP BY game
          ) g2 ON g1.id = g2.min_id
-         ORDER BY id ASC`
+         ORDER BY g1.id ASC`,
+        [todayDayName]
       );
       gameRows = rows;
     } catch (e) {
-      // Fallback query if JOIN fails
+      gameRows = [];
+    }
+
+    // Fallback: If no day-specific game_time, get distinct games
+    if (!gameRows || gameRows.length === 0) {
       try {
-        const [rows] = await db.query("SELECT DISTINCT game FROM game_time");
-        gameRows = rows.map((r, idx) => ({ id: idx + 1, game: r.game, open_time: '10:00 AM', close_time: '05:00 PM', status: '1' }));
+        const [rows] = await db.query(
+          `SELECT g1.* FROM game_time g1
+           INNER JOIN (
+             SELECT game, MIN(id) as min_id FROM game_time GROUP BY game
+           ) g2 ON g1.id = g2.min_id
+           ORDER BY g1.id ASC`
+        );
+        gameRows = rows;
       } catch (err2) {
-        gameRows = [];
+        try {
+          const [rows] = await db.query("SELECT DISTINCT game FROM game_time");
+          gameRows = rows.map((r, idx) => ({ id: idx + 1, game: r.game, open_time: '10:00 AM', close_time: '05:00 PM', status: '1' }));
+        } catch (err3) {
+          gameRows = [];
+        }
       }
     }
 
-    // Step B: Fallback if game_time is completely empty -> query result_chart or default markets
+    // Step B: If game_time empty -> query result_chart
     if (!gameRows || gameRows.length === 0) {
       try {
         const [chartGames] = await db.query("SELECT DISTINCT game_name as game FROM result_chart");
@@ -126,36 +210,40 @@ exports.getLandingMarkets = async (req, res) => {
       } catch (e) {}
     }
 
-    // Step C: Default popular markets fallback if DB has no games configured yet
-    if (!gameRows || gameRows.length === 0) {
-      gameRows = [
-        { id: 1, game: 'KALYAN', open_time: '04:10 PM', close_time: '06:10 PM', status: '1' },
-        { id: 2, game: 'TIME BAZAR', open_time: '01:00 PM', close_time: '02:00 PM', status: '1' },
-        { id: 3, game: 'MAIN BAZAR', open_time: '09:35 PM', close_time: '12:05 AM', status: '1' },
-        { id: 4, game: 'RAJDHANI NIGHT', open_time: '09:25 PM', close_time: '11:35 PM', status: '1' },
-        { id: 5, game: 'MILAN DAY', open_time: '03:05 PM', close_time: '05:05 PM', status: '1' },
-        { id: 6, game: 'SUPREME NIGHT', open_time: '08:45 PM', close_time: '10:45 PM', status: '1' }
-      ];
-    }
+    // Step C: High Performance Batch Pre-fetch (Only 2 queries instead of 44 sequential network queries)
+    const todayTimingMap = new Map();
+    try {
+      const [timings] = await db.query(
+        "SELECT game, open_time, close_time, status FROM game_time WHERE LOWER(TRIM(day)) = LOWER(?)",
+        [todayDayName]
+      );
+      for (const t of timings) {
+        if (t.game) todayTimingMap.set(String(t.game).trim().toLowerCase(), t);
+      }
+    } catch (e) {}
+
+    const todayResultMap = new Map();
+    try {
+      const [results] = await db.query(
+        "SELECT game_name, open_panna, open_digit, close_panna, close_digit FROM result_chart WHERE date = ? OR DATE(date) = ? OR date LIKE ?",
+        [todayDateStr, todayDateStr, `%${todayDateStr}%`]
+      );
+      for (const r of results) {
+        if (r.game_name) todayResultMap.set(String(r.game_name).trim().toLowerCase(), r);
+      }
+    } catch (e) {}
 
     const marketList = [];
 
     for (const g of gameRows) {
       const gName = g.game || g.game_name || 'MARKET';
+      const gKey = String(gName).trim().toLowerCase();
 
-      // Fetch today's specific timing for this game if available
-      let openTime = g.open_time || '10:00 AM';
-      let closeTime = g.close_time || '05:00 PM';
-      try {
-        const [todayTiming] = await db.query(
-          "SELECT open_time, close_time, status FROM game_time WHERE TRIM(game) = TRIM(?) AND LOWER(day) = LOWER(?) LIMIT 1",
-          [gName, todayDayName]
-        );
-        if (todayTiming.length > 0) {
-          if (todayTiming[0].open_time) openTime = todayTiming[0].open_time;
-          if (todayTiming[0].close_time) closeTime = todayTiming[0].close_time;
-        }
-      } catch (e) {}
+      // Instant in-memory lookup
+      const todayTiming = todayTimingMap.get(gKey);
+      let openTime = (todayTiming && todayTiming.open_time) ? todayTiming.open_time : (g.open_time || '10:00 AM');
+      let closeTime = (todayTiming && todayTiming.close_time) ? todayTiming.close_time : (g.close_time || '05:00 PM');
+      let gameStatus = (todayTiming && todayTiming.status !== undefined) ? todayTiming.status : (g.status || '1');
 
       let openPana = "***";
       let openDigit = "*";
@@ -163,23 +251,17 @@ exports.getLandingMarkets = async (req, res) => {
       let closeDigit = "*";
       let isDeclaredToday = false;
 
-      // Query today's result from result_chart
-      try {
-        const [resChart] = await db.query(
-          "SELECT * FROM result_chart WHERE TRIM(game_name) = TRIM(?) AND date = ? LIMIT 1",
-          [gName, todayDateStr]
-        );
-        if (resChart.length > 0) {
-          const row = resChart[0];
-          openPana = (row.open_panna && row.open_panna !== '') ? row.open_panna : "***";
-          openDigit = (row.open_digit !== null && row.open_digit !== undefined && row.open_digit !== '') ? row.open_digit : "*";
-          closePana = (row.close_panna && row.close_panna !== '') ? row.close_panna : "***";
-          closeDigit = (row.close_digit !== null && row.close_digit !== undefined && row.close_digit !== '') ? row.close_digit : "*";
-          if (openDigit !== '*' || closeDigit !== '*') {
-            isDeclaredToday = true;
-          }
+      // Instant in-memory lookup
+      const resChart = todayResultMap.get(gKey);
+      if (resChart) {
+        openPana = (resChart.open_panna && String(resChart.open_panna).trim() !== '') ? String(resChart.open_panna).trim() : "***";
+        openDigit = (resChart.open_digit !== null && resChart.open_digit !== undefined && String(resChart.open_digit).trim() !== '') ? String(resChart.open_digit).trim() : "*";
+        closePana = (resChart.close_panna && String(resChart.close_panna).trim() !== '') ? String(resChart.close_panna).trim() : "***";
+        closeDigit = (resChart.close_digit !== null && resChart.close_digit !== undefined && String(resChart.close_digit).trim() !== '') ? String(resChart.close_digit).trim() : "*";
+        if (openDigit !== '*' || closeDigit !== '*') {
+          isDeclaredToday = true;
         }
-      } catch (e) {}
+      }
 
       // Format result display string (e.g. 123-45-678 or ***-**-***)
       let jodiStr = "**";
@@ -190,13 +272,27 @@ exports.getLandingMarkets = async (req, res) => {
       }
 
       const resultDisplay = `${openPana}-${jodiStr}-${closePana}`;
+      const timing = evaluateGameTiming(openTime, closeTime, nowIST);
+      const isBettingOpen = timing.isWithinWindow && gameStatus !== '0';
+
+      let statusLabel = 'CLOSED';
+      if (isDeclaredToday) {
+        statusLabel = 'DECLARED TODAY';
+      } else if (isBettingOpen) {
+        statusLabel = 'OPEN FOR BETTING';
+      } else {
+        statusLabel = 'CLOSED FOR TODAY';
+      }
 
       marketList.push({
         id: g.id || 0,
         market_name: gName,
         open_time: openTime,
         close_time: closeTime,
-        status: g.status || '1',
+        status: gameStatus,
+        is_betting_open: isBettingOpen,
+        is_open_session: timing.isOpenSessionActive,
+        status_label: statusLabel,
         open_pana: openPana,
         open_digit: openDigit,
         close_pana: closePana,
@@ -206,7 +302,7 @@ exports.getLandingMarkets = async (req, res) => {
       });
     }
 
-    return res.json({ success: '1', data: marketList });
+    return res.json({ success: '1', data: marketList, ist_date: todayDateStr });
   } catch (err) {
     console.error('Error fetching landing markets:', err);
     return res.status(500).json({ success: '0', error: err.message });

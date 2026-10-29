@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { MessageCircle } from 'lucide-react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { Headphones } from 'lucide-react';
 import UserNavbar from './UserNavbar';
 import SidebarDrawer from './SidebarDrawer';
 import BottomNav from './BottomNav';
@@ -10,8 +10,11 @@ import QuizApp from '../../pages/QuizApp';
 import api from '../../utils/api';
 
 const UserLayout = ({ children, setAuth }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [themeColor, setThemeColor] = useState(() => localStorage.getItem('auth_theme_color') || 'gold');
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [userData, setUserData] = useState({
     name: localStorage.getItem('name') || '',
     phone: localStorage.getItem('phone') || '',
@@ -24,7 +27,6 @@ const UserLayout = ({ children, setAuth }) => {
   const [isLocked, setIsLocked] = useState(() => sessionStorage.getItem('mpin_unlocked') !== 'true');
   const [dataLoading, setDataLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
-  const navigate = useNavigate();
 
   const handlePageRefresh = async () => {
     try {
@@ -69,7 +71,7 @@ const UserLayout = ({ children, setAuth }) => {
       }
 
       setUserData({
-        name: prof.name || localStorage.getItem('name') || 'Sara 777 Player',
+        name: prof.name || localStorage.getItem('name') || 'Kalyan Matka Player',
         phone_number: prof.phone_number || prof.phone || localStorage.getItem('phone') || '',
         phone: prof.phone || localStorage.getItem('phone') || '',
         email: prof.email || '',
@@ -179,10 +181,21 @@ const UserLayout = ({ children, setAuth }) => {
     navigate('/login', { replace: true });
   };
 
-  const cleanWpNumber = wpNumber.replace(/\D/g, '');
-  const whatsappUrl = cleanWpNumber 
-    ? `https://wa.me/${cleanWpNumber.length === 10 ? '91' + cleanWpNumber : cleanWpNumber}?text=${encodeURIComponent(`Hello Support, I need assistance.`)}`
-    : `https://wa.me/?text=${encodeURIComponent(`Hello Support, I need assistance.`)}`;
+  // Fetch unread in-app chat count
+  useEffect(() => {
+    const phone = localStorage.getItem('phone');
+    if (!phone) return;
+    const checkUnread = () => {
+      api.get(`/chat/unread-count?phone=${phone}`).then(res => {
+        if (res.data?.success === '1') {
+          setUnreadChatCount(Number(res.data.count) || 0);
+        }
+      }).catch(() => {});
+    };
+    checkUnread();
+    const interval = setInterval(checkUnread, 12000);
+    return () => clearInterval(interval);
+  }, []);
 
   if (dataLoading) {
     return (
@@ -270,7 +283,6 @@ const UserLayout = ({ children, setAuth }) => {
         onLogout={handleLogout}
         themeColor={themeColor}
         onThemeChange={changeTheme}
-        whatsappUrl={whatsappUrl}
       />
 
       {/* Main Content Area with Pull-to-Refresh */}
@@ -287,6 +299,48 @@ const UserLayout = ({ children, setAuth }) => {
           </div>
         </PullToRefresh>
       </main>
+
+      {/* Floating In-App Live Support Chat Button */}
+      {location.pathname !== '/support' && (
+        <Link
+          to="/support"
+          style={{
+            position: 'fixed',
+            bottom: 'calc(78px + env(safe-area-inset-bottom, 0px))',
+            right: '16px',
+            zIndex: 998,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'linear-gradient(135deg, #d6be66 0%, #10b981 100%)',
+            color: '#081320',
+            padding: '10px 16px',
+            borderRadius: '30px',
+            fontWeight: '700',
+            fontSize: '0.84rem',
+            textDecoration: 'none',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45), 0 0 16px rgba(214, 190, 102, 0.35)',
+            transition: 'all 0.25s ease'
+          }}
+          title="Open Live Support Chat"
+        >
+          <Headphones size={18} />
+          <span>Live Chat</span>
+          {unreadChatCount > 0 && (
+            <span style={{
+              background: '#ef4444',
+              color: '#ffffff',
+              borderRadius: '50%',
+              padding: '2px 6px',
+              fontSize: '0.72rem',
+              fontWeight: '800',
+              animation: 'pulseDot 1.5s infinite'
+            }}>
+              {unreadChatCount}
+            </span>
+          )}
+        </Link>
+      )}
 
       {/* Fixed Bottom Navigation */}
       <BottomNav themeColor={themeColor} />

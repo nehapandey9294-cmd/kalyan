@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, PlayCircle, BookOpen, CheckCircle2, HelpCircle, ShieldCheck, PhoneCall, MessageCircle, Sparkles } from 'lucide-react';
+import { ArrowLeft, PlayCircle, BookOpen, CheckCircle2, HelpCircle, ShieldCheck, PhoneCall, Headphones, Sparkles } from 'lucide-react';
 import api from '../utils/api';
 
 const HowToPlay = () => {
@@ -38,10 +38,7 @@ const HowToPlay = () => {
   }, []);
 
   const cleanPhone = (contact.mobile || '').replace(/\D/g, '');
-  const cleanWp = (contact.whatsapp || '').replace(/\D/g, '');
-  const wpLink = cleanWp
-    ? `https://wa.me/${cleanWp.length === 10 ? '91' + cleanWp : cleanWp}?text=${encodeURIComponent('Hello, I have a question about how to play.')}`
-    : '#';
+
 
   return (
     <div style={{ maxWidth: '680px', margin: '0 auto', padding: '16px 14px 50px' }}>
@@ -221,32 +218,28 @@ const HowToPlay = () => {
         <HelpCircle size={32} style={{ color: '#10b981', marginBottom: '8px' }} />
         <h4 style={{ margin: '0 0 6px 0', color: '#fff', fontSize: '1rem', fontWeight: '700' }}>Have Any Doubts?</h4>
         <p style={{ margin: '0 0 16px 0', color: 'rgba(255,255,255,0.75)', fontSize: '0.85rem' }}>
-          Contact our 24/7 customer support team on WhatsApp for instant guidance.
+          Contact our 24/7 in-app support team for instant guidance.
         </p>
 
-        {cleanWp && (
-          <a
-            href={wpLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              backgroundColor: '#25D366',
-              color: '#ffffff',
-              padding: '10px 22px',
-              borderRadius: '30px',
-              fontWeight: '700',
-              fontSize: '0.9rem',
-              textDecoration: 'none',
-              boxShadow: '0 4px 15px rgba(37, 211, 102, 0.4)'
-            }}
-          >
-            <MessageCircle size={18} />
-            <span>Chat on WhatsApp</span>
-          </a>
-        )}
+        <Link
+          to="/support"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'linear-gradient(135deg, #d6be66 0%, #10b981 100%)',
+            color: '#081320',
+            padding: '10px 22px',
+            borderRadius: '30px',
+            fontWeight: '700',
+            fontSize: '0.9rem',
+            textDecoration: 'none',
+            boxShadow: '0 4px 15px rgba(214, 190, 102, 0.4)'
+          }}
+        >
+          <Headphones size={18} />
+          <span>Open Live Support Chat</span>
+        </Link>
       </div>
     </div>
   );

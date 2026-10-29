@@ -9,9 +9,15 @@ const { verifyToken } = require('../middlewares/auth');
 
 // Public Landing Information & Live Results endpoints
 router.get('/landing/info', landingController.getLandingInfo);
+router.get('/landing/rates', landingController.getLandingRates);
 router.get('/landing/markets', landingController.getLandingMarkets);
 router.get('/landing/chart/:chartType/:gameName', landingController.getChartData);
 router.get('/landing/chart/:chartType', landingController.getChartData);
+
+// Direct public aliases
+router.get('/markets', landingController.getLandingMarkets);
+router.get('/rates', landingController.getLandingRates);
+router.get('/info', landingController.getLandingInfo);
 
 
 // Health Check Endpoint (Checks Server & DB Health)
@@ -81,15 +87,8 @@ router.get('/app-info', async (req, res) => {
 
     const [settings] = await db.query('SELECT app_link, upi_name, mpin_status, slider_status, referral_status, auto_active_status, alert_message, privacy_policy_url, data_deletion_url FROM admin_settings LIMIT 1');
     const [admins] = await db.query('SELECT name FROM admin WHERE id = 1');
-    const [contacts] = await db.query('SELECT mobile, wp_mobile FROM contact_detail LIMIT 1');
-    let appName = 'Sara 777';
-    if (settings.length > 0 && settings[0].app_link && !settings[0].app_link.startsWith('http')) {
-      appName = settings[0].app_link;
-    } else if (settings.length > 0 && settings[0].upi_name && !settings[0].upi_name.startsWith('http')) {
-      appName = settings[0].upi_name;
-    } else if (admins.length > 0 && admins[0].name) {
-      appName = admins[0].name;
-    }
+    const [contacts] = await db.query('SELECT mobile, wp_mobile, email FROM contact_detail LIMIT 1');
+    const appName = 'Kalyan Matka';
 
     const contactInfo = contacts.length > 0 ? contacts[0] : {};
     const wpNum = contactInfo.wp_mobile || contactInfo.mobile || '';
@@ -118,6 +117,7 @@ router.get('/app-info', async (req, res) => {
         app_logo: '/img/logo.png',
         mobile: contactInfo.mobile || '',
         wp_mobile: wpNum,
+        email: contactInfo.email || 'support@saraquiz.com',
         mpin_status: mpinStatus,
         slider_status: sliderStatus,
         referral_status: referralStatus,
@@ -132,10 +132,11 @@ router.get('/app-info', async (req, res) => {
     return res.json({
       success: '1',
       data: {
-        app_name: 'Sara 777',
+        app_name: 'Kalyan Matka',
         app_logo: '/img/logo.png',
         mobile: '',
         wp_mobile: '',
+        email: 'support@saraquiz.com',
         mpin_status: '1',
         slider_status: '1',
         sliders: [],

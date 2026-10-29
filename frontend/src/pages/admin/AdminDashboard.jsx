@@ -4,10 +4,12 @@ import {
   Users, Gamepad2, TrendingUp, RefreshCw, Calendar, Filter, 
   CheckCircle2, XCircle, Clock, Search, Trophy, Wallet, 
   ArrowUpRight, ShieldCheck, Sparkles, UserCheck, UserX, Eye,
-  Home, Share2, Target, FileText, Settings, ChevronDown, ChevronRight, Menu, Maximize2, LogOut, Zap,
-  CreditCard
+  Home, Share2, Target, FileText, Settings, ChevronDown, ChevronRight, ChevronLeft, Menu, Maximize2, LogOut, Zap,
+  CreditCard, MessageSquare
 } from 'lucide-react';
 import PaymentGatewayManager from './PaymentGatewayManager';
+import AdminSupportChat from './AdminSupportChat';
+import chatSocket from '../../utils/chatSocket';
 import api from '../../utils/api';
 import { useAdminSession, clearAdminSession } from '../../utils/adminSession';
 import DataTable from '../../components/common/DataTable';
@@ -83,6 +85,39 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 992);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+
+  // Poll and listen to live chat unread messages for sidebar badge
+  useEffect(() => {
+    const fetchChatUnread = async () => {
+      try {
+        const res = await api.get('/chat/admin/conversations');
+        if (res.data?.success === '1' && Array.isArray(res.data.data)) {
+          const totalUnread = res.data.data.reduce((acc, c) => acc + (Number(c.unread_count || 0) > 0 ? 1 : 0), 0);
+          setChatUnreadCount(totalUnread);
+        }
+      } catch (e) {}
+    };
+    fetchChatUnread();
+    const interval = setInterval(fetchChatUnread, 30000);
+
+    const unsubMsg = chatSocket.onMessage((msg) => {
+      if (msg && msg.sender_type === 'user') {
+        setChatUnreadCount(prev => prev + 1);
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      unsubMsg();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'support_chat') {
+      setChatUnreadCount(0);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -206,9 +241,13 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const [reportGameName, setReportGameName] = useState('all');
   const [bidWinData, setBidWinData] = useState({ total_bid: 0, total_win: 0, profit: 0 });
 
-  // Auto Deposits State
+  // Auto Deposits State (Dashboard Grid Row 3)
+  const [autoDepositDate, setAutoDepositDate] = useState(() => getISTTodayStr());
   const [autoDeposits, setAutoDeposits] = useState([]);
   const [autoDepositSearch, setAutoDepositSearch] = useState('');
+  const [autoDepositPage, setAutoDepositPage] = useState(1);
+  const [autoDepositPerPage, setAutoDepositPerPage] = useState(10);
+  const [autoDepositsLoading, setAutoDepositsLoading] = useState(false);
 
   // User Management State (Image 3)
   const [users, setUsers] = useState([]);
@@ -643,14 +682,18 @@ const AdminDashboard = ({ setAdminAuth }) => {
     }
   };
 
-  const fetchAutoDeposits = async () => {
+  const fetchAutoDeposits = async (selectedDate = autoDepositDate) => {
+    setAutoDepositsLoading(true);
     try {
-      const res = await api.get('/admin/auto-deposits', getHeaders());
+      const dateParam = selectedDate && selectedDate !== 'all' ? `?date=${encodeURIComponent(selectedDate)}` : '';
+      const res = await api.get(`/admin/auto-deposits${dateParam}`, getHeaders());
       if (res.data.success === '1') {
-        setAutoDeposits(res.data.data);
+        setAutoDeposits(res.data.data || []);
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setAutoDepositsLoading(false);
     }
   };
 
@@ -1528,6 +1571,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
     fetchAnkBids();
     fetchBidWinReport();
     fetchAutoDeposits();
+    fetchSettings();
   }, [setAdminAuth]);
 
   useEffect(() => {
@@ -1554,7 +1598,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
       fetchAdminGames();
     } else if (activeTab === 'rates') {
       fetchRates();
-    } else if (['settings', 'contact_settings', 'how_to_play'].includes(activeTab)) {
+    } else if (['settings', 'contact_settings', 'how_to_play', 'auto_active'].includes(activeTab)) {
       fetchSettings();
     } else if (activeTab === 'sliders') {
       fetchSliders();
@@ -2272,6 +2316,29 @@ const AdminDashboard = ({ setAdminAuth }) => {
             )}
           </div>
 
+          {/* Live Support Chat */}
+          <div onClick={() => handleTabClick('support_chat')} style={sidebarItemStyle(activeTab === 'support_chat')}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                <MessageSquare size={18} style={{ flexShrink: 0, color: activeTab === 'support_chat' ? '#f1673e' : '#a6b0cf' }} />
+                {(!isDesktopSidebarCollapsed || isMobile) && <span style={{ whiteSpace: 'nowrap' }}>Live Support Chat</span>}
+              </div>
+              {chatUnreadCount > 0 && (!isDesktopSidebarCollapsed || isMobile) && (
+                <span style={{
+                  backgroundColor: '#ef4444',
+                  color: '#ffffff',
+                  fontSize: '0.7rem',
+                  fontWeight: '700',
+                  padding: '2px 7px',
+                  borderRadius: '10px',
+                  boxShadow: '0 2px 6px rgba(239, 68, 68, 0.4)'
+                }}>
+                  {chatUnreadCount}
+                </span>
+              )}
+            </div>
+          </div>
+
         </div>
 
         {/* Sidebar Footer Logout */}
@@ -2296,7 +2363,17 @@ const AdminDashboard = ({ setAdminAuth }) => {
       </div>
 
       {/* 2. Main Content Container */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', minWidth: 0, width: '100%', maxWidth: '100%' }}>
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        overflowY: activeTab === 'support_chat' ? 'hidden' : 'auto',
+        height: activeTab === 'support_chat' ? 'calc(100vh - 70px)' : 'auto',
+        maxHeight: activeTab === 'support_chat' ? 'calc(100dvh - 70px)' : 'none',
+        minWidth: 0,
+        width: '100%',
+        maxWidth: '100%'
+      }}>
 
         {/* Top Header Navbar */}
         <div style={{
@@ -2337,7 +2414,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
               style={{ color: '#ffffff', fontSize: isMobile ? '0.88rem' : '0.98rem', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}
               onClick={() => handleTabClick('dashboards')}
             >
-              Sara 777 Admin
+              Kalyan Matka Admin
             </span>
           </div>
 
@@ -2475,7 +2552,21 @@ const AdminDashboard = ({ setAdminAuth }) => {
         </div>
 
         {/* 3. Screen Views */}
-        <div style={{ padding: isMobile ? '12px 14px' : '24px 28px', flex: 1, minWidth: 0, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+        <div style={{
+          padding: activeTab === 'support_chat'
+            ? (isMobile ? '6px 8px' : '10px 16px')
+            : (isMobile ? '12px 14px' : '24px 28px'),
+          flex: 1,
+          minWidth: 0,
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+          display: activeTab === 'support_chat' ? 'flex' : 'block',
+          flexDirection: activeTab === 'support_chat' ? 'column' : undefined,
+          height: activeTab === 'support_chat' ? '100%' : 'auto',
+          minHeight: 0,
+          overflow: activeTab === 'support_chat' ? 'hidden' : 'visible'
+        }}>
 
 
 
@@ -2601,7 +2692,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                           Welcome Back!
                         </h5>
                         <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.8rem', margin: 0 }}>
-                          Sara 777 Admin Console
+                          Kalyan Matka Admin Console
                         </p>
                       </div>
                       <div style={{
@@ -3201,158 +3292,501 @@ const AdminDashboard = ({ setAdminAuth }) => {
               </div>
 
               {/* Grid Row 3: Fund Request Auto Deposit History Table */}
-              <div style={{
-                backgroundColor: '#ffffff',
-                borderRadius: '12px',
-                padding: '24px',
-                border: '1px solid #eff2f7',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
-              }}>
-                <div style={{
-                  display: 'flex',
-                  flexDirection: isMobile ? 'column' : 'row',
-                  justifyContent: 'space-between',
-                  alignItems: isMobile ? 'flex-start' : 'center',
-                  gap: '12px',
-                  marginBottom: '18px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#e0e7ff', color: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Wallet size={18} />
+              {(() => {
+                const filteredAutoDeposits = autoDeposits.filter(d => !autoDepositSearch || 
+                  (d.username && d.username.toLowerCase().includes(autoDepositSearch.toLowerCase())) ||
+                  (d.user_name && d.user_name.toLowerCase().includes(autoDepositSearch.toLowerCase())) ||
+                  (d.txt_request && d.txt_request.toLowerCase().includes(autoDepositSearch.toLowerCase())) ||
+                  (d.txt_id && String(d.txt_id).toLowerCase().includes(autoDepositSearch.toLowerCase())) ||
+                  (d.amount && String(d.amount).includes(autoDepositSearch))
+                );
+
+                const totalItems = filteredAutoDeposits.length;
+                const totalPages = Math.max(1, Math.ceil(totalItems / autoDepositPerPage));
+                const safePage = Math.min(Math.max(1, autoDepositPage), totalPages);
+                const startIndex = (safePage - 1) * autoDepositPerPage;
+                const endIndex = Math.min(startIndex + autoDepositPerPage, totalItems);
+                const currentItems = filteredAutoDeposits.slice(startIndex, endIndex);
+
+                const totalAmount = filteredAutoDeposits.reduce((acc, d) => acc + (parseFloat(d.amount) || 0), 0);
+                const approvedCount = filteredAutoDeposits.filter(d => d.status === '1' || d.status === 1).length;
+                const pendingCount = filteredAutoDeposits.filter(d => d.status === '0' || d.status === 0).length;
+                const declinedCount = filteredAutoDeposits.filter(d => d.status === '-1' || d.status === -1).length;
+
+                return (
+                  <div style={{
+                    backgroundColor: '#ffffff',
+                    borderRadius: '12px',
+                    padding: '24px',
+                    border: '1px solid #eff2f7',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
+                  }}>
+                    {/* Header + Title & Stats */}
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: isMobile ? 'column' : 'row',
+                      justifyContent: 'space-between',
+                      alignItems: isMobile ? 'flex-start' : 'center',
+                      gap: '14px',
+                      marginBottom: '18px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#e0e7ff', color: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Wallet size={20} />
+                        </div>
+                        <div>
+                          <h5 style={{ margin: 0, fontSize: '1.05rem', color: '#1e293b', fontWeight: '800' }}>
+                            Fund Request Auto Deposit History
+                          </h5>
+                          <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                            Deposit requests: <strong style={{ color: '#4338ca' }}>{autoDepositDate ? (autoDepositDate === getISTTodayStr() ? `Today (${autoDepositDate})` : autoDepositDate) : 'All Dates'}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Summary Badges */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                        <span style={{ backgroundColor: '#f1f5f9', color: '#334155', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700' }}>
+                          Total: ₹ {totalAmount.toLocaleString('en-IN')} ({totalItems})
+                        </span>
+                        {pendingCount > 0 && (
+                          <span style={{ backgroundColor: '#fef3c7', color: '#b45309', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700' }}>
+                            ⏳ {pendingCount} Pending
+                          </span>
+                        )}
+                        <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700' }}>
+                          ✓ {approvedCount} Accepted
+                        </span>
+                        {declinedCount > 0 && (
+                          <span style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '4px 10px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700' }}>
+                            ✕ {declinedCount} Rejected
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <h5 style={{ margin: 0, fontSize: '0.98rem', color: '#1e293b', fontWeight: '700' }}>
-                      Fund Request Auto Deposit History
-                    </h5>
-                  </div>
 
-                  <div style={{ position: 'relative', width: isMobile ? '100%' : '280px' }}>
-                    <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                    <input
-                      type="text"
-                      placeholder="Search UTR, Username, Request..."
-                      value={autoDepositSearch}
-                      onChange={(e) => setAutoDepositSearch(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px 8px 34px',
-                        borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '0.82rem',
-                        backgroundColor: '#f8fafc',
-                        outline: 'none'
-                      }}
-                    />
-                  </div>
-                </div>
+                    {/* Filter & Search Bar */}
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: isMobile ? 'column' : 'row',
+                      justifyContent: 'space-between',
+                      alignItems: isMobile ? 'stretch' : 'center',
+                      gap: '12px',
+                      backgroundColor: '#f8fafc',
+                      padding: '12px 16px',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      marginBottom: '16px'
+                    }}>
+                      {/* Left: Date Filter controls */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Calendar size={16} style={{ color: '#64748b' }} />
+                          <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#475569' }}>Date:</span>
+                        </div>
+                        <input
+                          type="date"
+                          value={autoDepositDate}
+                          onChange={(e) => {
+                            const newDate = e.target.value;
+                            setAutoDepositDate(newDate);
+                            setAutoDepositPage(1);
+                            fetchAutoDeposits(newDate);
+                          }}
+                          style={{
+                            padding: '6px 10px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '0.82rem',
+                            backgroundColor: '#ffffff',
+                            color: '#1e293b',
+                            fontWeight: '600',
+                            outline: 'none'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const today = getISTTodayStr();
+                            setAutoDepositDate(today);
+                            setAutoDepositPage(1);
+                            fetchAutoDeposits(today);
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            backgroundColor: autoDepositDate === getISTTodayStr() ? '#4338ca' : '#ffffff',
+                            color: autoDepositDate === getISTTodayStr() ? '#ffffff' : '#334155',
+                            boxShadow: autoDepositDate === getISTTodayStr() ? '0 2px 6px rgba(67, 56, 202, 0.3)' : '0 1px 2px rgba(0,0,0,0.05)',
+                            fontSize: '0.78rem',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          Today (1 Din)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAutoDepositDate('');
+                            setAutoDepositPage(1);
+                            fetchAutoDeposits('');
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            backgroundColor: !autoDepositDate ? '#4338ca' : '#ffffff',
+                            color: !autoDepositDate ? '#ffffff' : '#334155',
+                            boxShadow: !autoDepositDate ? '0 2px 6px rgba(67, 56, 202, 0.3)' : '0 1px 2px rgba(0,0,0,0.05)',
+                            fontSize: '0.78rem',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          All Dates
+                        </button>
+                      </div>
 
-                <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#1e293b', color: '#f8fafc', textAlign: 'left' }}>
-                        <th style={{ padding: '12px 14px', fontWeight: '700' }}>#</th>
-                        <th style={{ padding: '12px 14px', fontWeight: '700' }}>User Name</th>
-                        <th style={{ padding: '12px 14px', fontWeight: '700' }}>Amount</th>
-                        <th style={{ padding: '12px 14px', fontWeight: '700' }}>UTR / Txn ID</th>
-                        <th style={{ padding: '12px 14px', fontWeight: '700' }}>Req ID</th>
-                        <th style={{ padding: '12px 14px', fontWeight: '700' }}>Date</th>
-                        <th style={{ padding: '12px 14px', fontWeight: '700' }}>Status</th>
-                        <th style={{ padding: '12px 14px', fontWeight: '700' }}>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {autoDeposits
-                        .filter(d => !autoDepositSearch || 
-                          (d.username && d.username.toLowerCase().includes(autoDepositSearch.toLowerCase())) ||
-                          (d.user_name && d.user_name.toLowerCase().includes(autoDepositSearch.toLowerCase())) ||
-                          (d.txt_request && d.txt_request.toLowerCase().includes(autoDepositSearch.toLowerCase()))
-                        )
-                        .map((dep, idx) => (
-                          <tr key={dep.id} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
-                            <td style={{ padding: '12px 14px', color: '#64748b' }}>{idx + 1}</td>
-                            <td style={{ padding: '12px 14px', fontWeight: '700', color: '#1e293b' }}>
-                              {dep.user_name || dep.username || 'N/A'}
-                            </td>
-                            <td style={{ padding: '12px 14px', fontWeight: '800', color: '#10b981' }}>₹ {dep.amount}</td>
-                            <td style={{ padding: '12px 14px', color: '#475569', fontFamily: 'monospace', fontSize: '0.82rem' }}>
-                              {dep.txt_request || dep.txt_id || '-'}
-                            </td>
-                            <td style={{ padding: '12px 14px', color: '#64748b' }}>#{dep.id}</td>
-                            <td style={{ padding: '12px 14px', color: '#64748b', fontSize: '0.8rem' }}>{dep.txt_date}</td>
-                            <td style={{ padding: '12px 14px' }}>
-                              {dep.status === '1' ? (
-                                <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '4px 10px', borderRadius: '12px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                  <CheckCircle2 size={12} /> Accepted
-                                </span>
-                              ) : dep.status === '0' ? (
-                                <span style={{ backgroundColor: '#fef3c7', color: '#b45309', padding: '4px 10px', borderRadius: '12px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                  <Clock size={12} /> Pending
-                                </span>
-                              ) : (
-                                <span style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '4px 10px', borderRadius: '12px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                  <XCircle size={12} /> Rejected
-                                </span>
-                              )}
-                            </td>
-                            <td style={{ padding: '12px 14px' }}>
-                              {dep.status === '0' ? (
-                                <div style={{ display: 'flex', gap: '6px' }}>
-                                  <button
-                                    onClick={() => handleAutoDepositAction(dep.id, '1')}
-                                    style={{
-                                      backgroundColor: '#10b981',
-                                      color: '#ffffff',
-                                      border: 'none',
-                                      padding: '5px 10px',
-                                      borderRadius: '6px',
-                                      fontSize: '0.75rem',
-                                      fontWeight: '700',
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '4px'
-                                    }}
-                                  >
-                                    <CheckCircle2 size={12} /> Approve
-                                  </button>
-                                  <button
-                                    onClick={() => handleAutoDepositAction(dep.id, '-1')}
-                                    style={{
-                                      backgroundColor: '#ef4444',
-                                      color: '#ffffff',
-                                      border: 'none',
-                                      padding: '5px 10px',
-                                      borderRadius: '6px',
-                                      fontSize: '0.75rem',
-                                      fontWeight: '700',
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '4px'
-                                    }}
-                                  >
-                                    <XCircle size={12} /> Decline
-                                  </button>
-                                </div>
-                              ) : (
-                                <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>--</span>
-                              )}
-                            </td>
+                      {/* Right: Search & Per Page */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '600' }}>Show:</span>
+                          <select
+                            value={autoDepositPerPage}
+                            onChange={(e) => {
+                              setAutoDepositPerPage(Number(e.target.value));
+                              setAutoDepositPage(1);
+                            }}
+                            style={{
+                              padding: '6px 8px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              fontSize: '0.8rem',
+                              backgroundColor: '#ffffff',
+                              color: '#1e293b',
+                              fontWeight: '600',
+                              outline: 'none',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <option value="5">5</option>
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                          </select>
+                        </div>
+
+                        <div style={{ position: 'relative', width: isMobile ? '100%' : '240px' }}>
+                          <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                          <input
+                            type="text"
+                            placeholder="Search UTR, User, Req..."
+                            value={autoDepositSearch}
+                            onChange={(e) => {
+                              setAutoDepositSearch(e.target.value);
+                              setAutoDepositPage(1);
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '6px 10px 6px 30px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              fontSize: '0.8rem',
+                              backgroundColor: '#ffffff',
+                              outline: 'none'
+                            }}
+                          />
+                          {autoDepositSearch && (
+                            <button
+                              onClick={() => { setAutoDepositSearch(''); setAutoDepositPage(1); }}
+                              style={{
+                                position: 'absolute',
+                                right: '8px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                border: 'none',
+                                background: 'transparent',
+                                color: '#94a3b8',
+                                cursor: 'pointer',
+                                fontSize: '0.85rem'
+                              }}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={() => fetchAutoDeposits(autoDepositDate)}
+                          disabled={autoDepositsLoading}
+                          title="Refresh Deposits"
+                          style={{
+                            padding: '6px 10px',
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '6px',
+                            color: '#475569',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          <RefreshCw size={14} style={{ animation: autoDepositsLoading ? 'spin 1s linear infinite' : 'none' }} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Table Container */}
+                    <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#1e293b', color: '#f8fafc', textAlign: 'left' }}>
+                            <th style={{ padding: '12px 14px', fontWeight: '700' }}>#</th>
+                            <th style={{ padding: '12px 14px', fontWeight: '700' }}>User Name</th>
+                            <th style={{ padding: '12px 14px', fontWeight: '700' }}>Amount</th>
+                            <th style={{ padding: '12px 14px', fontWeight: '700' }}>UTR / Txn ID</th>
+                            <th style={{ padding: '12px 14px', fontWeight: '700' }}>Req ID</th>
+                            <th style={{ padding: '12px 14px', fontWeight: '700' }}>Date & Time</th>
+                            <th style={{ padding: '12px 14px', fontWeight: '700' }}>Status</th>
+                            <th style={{ padding: '12px 14px', fontWeight: '700' }}>Action</th>
                           </tr>
-                        ))}
-                      {autoDeposits.length === 0 && (
-                        <tr>
-                          <td colSpan="8" style={{ padding: '30px 20px', textAlign: 'center', color: '#94a3b8' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                              <Wallet size={32} style={{ color: '#cbd5e1' }} />
-                              <span style={{ fontSize: '0.88rem', fontWeight: '500' }}>No auto deposit requests found</span>
-                            </div>
-                          </td>
-                        </tr>
+                        </thead>
+                        <tbody>
+                          {autoDepositsLoading ? (
+                            <tr>
+                              <td colSpan="8" style={{ padding: '36px 20px', textAlign: 'center', color: '#64748b' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                  <RefreshCw size={18} style={{ animation: 'spin 1s linear infinite', color: '#4338ca' }} />
+                                  <span style={{ fontWeight: '600' }}>Loading deposit requests...</span>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : currentItems.length > 0 ? (
+                            currentItems.map((dep, idx) => (
+                              <tr key={dep.id} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                                <td style={{ padding: '12px 14px', color: '#64748b', fontWeight: '600' }}>
+                                  {startIndex + idx + 1}
+                                </td>
+                                <td style={{ padding: '12px 14px', fontWeight: '700', color: '#1e293b' }}>
+                                  {dep.user_name || dep.username || 'N/A'}
+                                  {dep.username && dep.user_name && dep.username !== dep.user_name && (
+                                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: '500' }}>
+                                      {dep.username}
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{ padding: '12px 14px', fontWeight: '800', color: '#10b981' }}>
+                                  ₹ {parseFloat(dep.amount || 0).toLocaleString('en-IN')}
+                                </td>
+                                <td style={{ padding: '12px 14px', color: '#475569', fontFamily: 'monospace', fontSize: '0.82rem' }}>
+                                  {dep.txt_request || dep.txt_id || '-'}
+                                </td>
+                                <td style={{ padding: '12px 14px', color: '#64748b', fontWeight: '600' }}>
+                                  #{dep.id}
+                                </td>
+                                <td style={{ padding: '12px 14px', color: '#64748b', fontSize: '0.8rem' }}>
+                                  {dep.txt_date}
+                                </td>
+                                <td style={{ padding: '12px 14px' }}>
+                                  {dep.status === '1' || dep.status === 1 ? (
+                                    <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '4px 10px', borderRadius: '12px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                      <CheckCircle2 size={12} /> Accepted
+                                    </span>
+                                  ) : dep.status === '0' || dep.status === 0 ? (
+                                    <span style={{ backgroundColor: '#fef3c7', color: '#b45309', padding: '4px 10px', borderRadius: '12px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                      <Clock size={12} /> Pending
+                                    </span>
+                                  ) : (
+                                    <span style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '4px 10px', borderRadius: '12px', fontSize: '0.74rem', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                      <XCircle size={12} /> Rejected
+                                    </span>
+                                  )}
+                                </td>
+                                <td style={{ padding: '12px 14px' }}>
+                                  {dep.status === '0' || dep.status === 0 ? (
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                      <button
+                                        onClick={() => handleAutoDepositAction(dep.id, '1')}
+                                        style={{
+                                          backgroundColor: '#10b981',
+                                          color: '#ffffff',
+                                          border: 'none',
+                                          padding: '5px 10px',
+                                          borderRadius: '6px',
+                                          fontSize: '0.75rem',
+                                          fontWeight: '700',
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '4px'
+                                        }}
+                                      >
+                                        <CheckCircle2 size={12} /> Approve
+                                      </button>
+                                      <button
+                                        onClick={() => handleAutoDepositAction(dep.id, '-1')}
+                                        style={{
+                                          backgroundColor: '#ef4444',
+                                          color: '#ffffff',
+                                          border: 'none',
+                                          padding: '5px 10px',
+                                          borderRadius: '6px',
+                                          fontSize: '0.75rem',
+                                          fontWeight: '700',
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '4px'
+                                        }}
+                                      >
+                                        <XCircle size={12} /> Decline
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>--</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="8" style={{ padding: '36px 20px', textAlign: 'center', color: '#94a3b8' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                  <Wallet size={36} style={{ color: '#cbd5e1' }} />
+                                  <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#475569' }}>
+                                    {autoDepositDate ? `No deposit requests found for ${autoDepositDate === getISTTodayStr() ? 'Today' : autoDepositDate}` : 'No deposit requests found'}
+                                  </span>
+                                  {autoDepositDate && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setAutoDepositDate('');
+                                        setAutoDepositPage(1);
+                                        fetchAutoDeposits('');
+                                      }}
+                                      style={{
+                                        backgroundColor: '#f1f5f9',
+                                        color: '#4338ca',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '6px 14px',
+                                        borderRadius: '6px',
+                                        fontSize: '0.78rem',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        marginTop: '4px'
+                                      }}
+                                    >
+                                      View All Dates →
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pagination Bar */}
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: isMobile ? 'column' : 'row',
+                      justifyContent: 'space-between',
+                      alignItems: isMobile ? 'center' : 'center',
+                      gap: '12px',
+                      marginTop: '16px',
+                      paddingTop: '12px',
+                      borderTop: '1px solid #f1f5f9'
+                    }}>
+                      <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                        Showing <strong style={{ color: '#1e293b' }}>{totalItems === 0 ? 0 : startIndex + 1}</strong> to <strong style={{ color: '#1e293b' }}>{endIndex}</strong> of <strong style={{ color: '#1e293b' }}>{totalItems}</strong> entries
+                      </div>
+
+                      {totalPages > 1 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <button
+                            onClick={() => setAutoDepositPage(prev => Math.max(1, prev - 1))}
+                            disabled={safePage <= 1}
+                            style={{
+                              padding: '6px 10px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              backgroundColor: safePage <= 1 ? '#f8fafc' : '#ffffff',
+                              color: safePage <= 1 ? '#94a3b8' : '#334155',
+                              cursor: safePage <= 1 ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '0.78rem',
+                              fontWeight: '600'
+                            }}
+                          >
+                            <ChevronLeft size={14} /> Prev
+                          </button>
+
+                          {Array.from({ length: totalPages }, (_, i) => i + 1)
+                            .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                            .map((p, idx, arr) => {
+                              const prevPage = arr[idx - 1];
+                              const showDots = prevPage && p - prevPage > 1;
+                              return (
+                                <React.Fragment key={p}>
+                                  {showDots && (
+                                    <span style={{ padding: '0 4px', color: '#94a3b8', fontSize: '0.8rem' }}>…</span>
+                                  )}
+                                  <button
+                                    onClick={() => setAutoDepositPage(p)}
+                                    style={{
+                                      minWidth: '32px',
+                                      height: '32px',
+                                      padding: '0 8px',
+                                      borderRadius: '6px',
+                                      border: p === safePage ? 'none' : '1px solid #cbd5e1',
+                                      backgroundColor: p === safePage ? '#4338ca' : '#ffffff',
+                                      color: p === safePage ? '#ffffff' : '#334155',
+                                      fontSize: '0.78rem',
+                                      fontWeight: p === safePage ? '700' : '600',
+                                      cursor: 'pointer',
+                                      boxShadow: p === safePage ? '0 2px 6px rgba(67, 56, 202, 0.3)' : 'none'
+                                    }}
+                                  >
+                                    {p}
+                                  </button>
+                                </React.Fragment>
+                              );
+                            })}
+
+                          <button
+                            onClick={() => setAutoDepositPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={safePage >= totalPages}
+                            style={{
+                              padding: '6px 10px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              backgroundColor: safePage >= totalPages ? '#f8fafc' : '#ffffff',
+                              color: safePage >= totalPages ? '#94a3b8' : '#334155',
+                              cursor: safePage >= totalPages ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '0.78rem',
+                              fontWeight: '600'
+                            }}
+                          >
+                            Next <ChevronRight size={14} />
+                          </button>
+                        </div>
                       )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
             </div>
           )}
@@ -5473,6 +5907,11 @@ const AdminDashboard = ({ setAdminAuth }) => {
             </div>
           )}
 
+          {/* VIEW: LIVE SUPPORT SOCKET CHAT MODULE */}
+          {activeTab === 'support_chat' && (
+            <AdminSupportChat isMobile={isMobile} />
+          )}
+
           {/* VIEW: PAYMENT GATEWAYS & DEPOSIT MODE MANAGEMENT */}
           {activeTab === 'payment_gateway' && (
             <PaymentGatewayManager isMobile={isMobile} />
@@ -5761,7 +6200,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                         🌐 App URLs & Legal Compliance (Play Store & Privacy Policy)
                       </h5>
                       <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: '#74788d' }}>
-                        Configure the APK Download Button Link, How to Play Website Link, Google Play Privacy Policy URL, and Data Deletion Link for Sara 777.
+                        Configure the APK Download Button Link, How to Play Website Link, Google Play Privacy Policy URL, and Data Deletion Link for Kalyan Matka.
                       </p>
                     </div>
 

@@ -1,0 +1,22 @@
+{
+  "name": "sara777-landing-page",
+  "version": "1.0.0",
+  "description": "Official Landing Page for Sara 777 - Live Matka Results & Android APK Download Portal",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve . -p 3000",
+    "dev": "npx live-server --port=5175",
+    "build": "echo 'Landing page is static and ready.'",
+    "preview": "npx serve ."
+  },
+  "keywords": [
+    "sara-777",
+    "matka-results",
+    "gama567",
+    "kalyan-matka",
+    "apk-download",
+    "landing-page"
+  ],
+  "author": "Sara 777 Team",
+  "license": "ISC"
+}

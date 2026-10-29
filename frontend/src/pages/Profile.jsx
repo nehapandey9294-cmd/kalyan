@@ -188,7 +188,7 @@ const Profile = () => {
                 src="/img/logo.png"
                 alt="Logo"
                 style={{ height: '48px', width: 'auto', objectFit: 'contain' }}
-                onError={(e) => { e.target.src = '/img/lucky-matka-logo.png'; }}
+                onError={(e) => { e.target.src = '/img/logo.png'; }}
               />
             </div>
             <h5 style={{ color: 'var(--color-gold)', fontWeight: '700', margin: '0 0 14px 0', fontSize: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>

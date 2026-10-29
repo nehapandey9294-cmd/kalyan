@@ -4,7 +4,7 @@ import { Menu, PlusCircle, Wallet, LogOut } from 'lucide-react';
 import api from '../../utils/api';
 
 const UserNavbar = ({ onOpenSidebar, wallet = '0', themeColor = 'gold', onThemeChange, onLogout }) => {
-  const [appName, setAppName] = useState('Sara 777');
+  const [appName, setAppName] = useState('Kalyan Matka');
 
   useEffect(() => {
     api.get('/app-info').then(res => {
@@ -58,7 +58,7 @@ const UserNavbar = ({ onOpenSidebar, wallet = '0', themeColor = 'gold', onThemeC
         <Link to="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
           <img
             src="/img/logo.png"
-            alt="Sara 777 Logo"
+            alt="Kalyan Matka Logo"
             style={{
               height: '46px',
               width: 'auto',
@@ -67,7 +67,7 @@ const UserNavbar = ({ onOpenSidebar, wallet = '0', themeColor = 'gold', onThemeC
               filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.5))'
             }}
             onError={(e) => {
-              e.target.src = '/img/lucky-matka-logo.png';
+              e.target.src = '/img/logo.png';
             }}
           />
         </Link>

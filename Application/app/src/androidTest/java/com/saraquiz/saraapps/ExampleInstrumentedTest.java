@@ -1,4 +1,4 @@
-package Sara777.quizzes;
+package saraquiz.saraapps;
 
 import android.content.Context;
 
@@ -21,6 +21,6 @@ public class ExampleInstrumentedTest {
     public void useAppContext() {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
-        assertEquals("Sara777.quizzes", appContext.getPackageName());
+        assertEquals("saraquiz.saraapps", appContext.getPackageName());
     }
 }

@@ -1410,8 +1410,10 @@ exports.deleteBidHistory = async (req, res) => {
 // Get Admin Settings and Contacts (PHP Parity)
 exports.getSettings = async (req, res) => {
   try {
-    const [[settings]] = await db.query('SELECT * FROM admin_settings WHERE id = 1');
-    const [[contact]] = await db.query('SELECT * FROM contact_detail WHERE id = 1');
+    const [settingsRows] = await db.query('SELECT * FROM admin_settings LIMIT 1');
+    const settings = settingsRows && settingsRows.length > 0 ? settingsRows[0] : {};
+    const [contactRows] = await db.query('SELECT * FROM contact_detail LIMIT 1');
+    const contact = contactRows && contactRows.length > 0 ? contactRows[0] : {};
     const [daysRows] = await db.query("SELECT name FROM withdraw_limit_days WHERE role = 'Days' AND status = 1");
     const withdraw_days = daysRows.map(r => r.name);
     return res.json({ success: '1', settings: settings || {}, contact: contact || {}, withdraw_days });
@@ -1512,6 +1514,9 @@ exports.updateSettings = async (req, res) => {
     }
 
     // Update admin_settings
+    const [targetRows] = await db.query('SELECT id FROM admin_settings LIMIT 1');
+    const targetId = targetRows && targetRows.length > 0 ? targetRows[0].id : 1;
+
     await db.query(
       `UPDATE admin_settings SET 
         ac_name = COALESCE(?, ac_name),
@@ -1548,7 +1553,7 @@ exports.updateSettings = async (req, res) => {
         auto_upi_id = COALESCE(?, auto_upi_id),
         privacy_policy_url = COALESCE(?, privacy_policy_url),
         data_deletion_url = COALESCE(?, data_deletion_url)
-       WHERE id = 1`,
+       WHERE id = ?`,
       [
         ac_name !== undefined ? ac_name : null,
         ac_number !== undefined ? ac_number : null,
@@ -1583,7 +1588,8 @@ exports.updateSettings = async (req, res) => {
         active_payment_gateway !== undefined && active_payment_gateway !== null ? String(active_payment_gateway) : null,
         cleanAutoUpi !== undefined ? cleanAutoUpi : null,
         privacy_policy_url !== undefined ? privacy_policy_url : null,
-        data_deletion_url !== undefined ? data_deletion_url : null
+        data_deletion_url !== undefined ? data_deletion_url : null,
+        targetId
       ]
     );
 
@@ -1981,8 +1987,16 @@ exports.getAutoDeposits = async (req, res) => {
     const conditions = [];
 
     if (date && date !== 'all' && date.trim() !== '') {
-      conditions.push('(d.txt_date LIKE ? OR DATE(d.txt_date) = ?)');
-      params.push(`%${date}%`, date);
+      const cleanDate = date.trim();
+      let dmyHyphen = '';
+      let dmySlash = '';
+      if (cleanDate.includes('-') && cleanDate.split('-')[0].length === 4) {
+        const [y, m, d_part] = cleanDate.split('-');
+        dmyHyphen = `${d_part}-${m}-${y}`;
+        dmySlash = `${d_part}/${m}/${y}`;
+      }
+      conditions.push('(d.txt_date LIKE ? OR (d.txt_date LIKE ? AND ? != "") OR (d.txt_date LIKE ? AND ? != "") OR DATE(d.txt_date) = ?)');
+      params.push(`%${cleanDate}%`, `%${dmyHyphen}%`, dmyHyphen, `%${dmySlash}%`, dmySlash, cleanDate);
     }
 
     if (search && search.trim() !== '') {
@@ -1995,7 +2009,7 @@ exports.getAutoDeposits = async (req, res) => {
       query += ' WHERE ' + conditions.join(' AND ');
     }
 
-    query += ' ORDER BY d.id DESC LIMIT 500';
+    query += ' ORDER BY d.id DESC LIMIT 2000';
 
     const [deposits] = await db.query(query, params);
 

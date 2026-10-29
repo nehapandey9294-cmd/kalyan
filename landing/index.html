@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kalyan Matka Official App | India's #1 Live Matka Results & APK Download</title>
+  <meta name="description"
+    content="Download Kalyan Matka Official Android App. Fastest Kalyan, Time Bazar, Main Bazar live results, jodi charts, panel charts & 100% verified payouts. 24x7 Live Chat & Helpline support.">
+  <meta name="keywords"
+    content="Kalyan Matka, gama567, kalyan matka, live matka results, time bazar, main bazar, matka chart, Kalyan Matka apk download">
+
+  <!-- Open Graph / Meta -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Kalyan Matka Official App - Live Matka Results & Play Portal">
+  <meta property="og:description"
+    content="Get fastest live Kalyan & Main Bazar results. Download official Kalyan Matka APK directly.">
+  <meta property="og:image" content="img/logo.png">
+  <link rel="icon" type="image/png" href="img/logo.png">
+  <link rel="shortcut icon" type="image/png" href="img/logo.png">
+  <link rel="apple-touch-icon" href="img/logo.png">
+
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800;900&display=swap"
+    rel="stylesheet">
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <!-- =====================================================================
+       TOP TICKER ANNOUNCEMENT MARQUEE
+       ===================================================================== -->
+  <div class="alert-ticker-bar">
+    <div class="container ticker-inner">
+      <div class="ticker-badge">
+        <i class="fa-solid fa-bullhorn"></i> Notice
+      </div>
+      <div class="marquee-content">
+        <div class="marquee-text" id="tickerMarquee">
+          ⚡ Welcome to Kalyan Matka! India's No.1 Live Matka Result Portal. Download Official Android App now for fastest
+          Kalyan, Time Bazar & Main Bazar results! Fast automatic withdrawals & 24x7 Live Chat support available.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       MAIN NAVBAR & HEADER
+       ===================================================================== -->
+  <header class="site-header" id="siteHeader">
+    <div class="container nav-wrapper">
+
+      <!-- Brand Logo -->
+      <a href="#" class="brand-logo">
+        <div class="brand-icon-box">
+          <img src="img/logo.png" alt="Kalyan Matka Logo">
+        </div>
+        <div class="brand-text">
+          <h1 class="dyn-app-name">Kalyan Matka</h1>
+          <span>OFFICIAL MATKA APP</span>
+        </div>
+      </a>
+
+      <!-- Desktop Nav Links -->
+      <nav>
+        <ul class="nav-links">
+          <li><a href="#results" class="nav-link"><i class="fa-solid fa-bolt" style="color: #fbbf24;"></i> Live
+              Results</a></li>
+          <li><a href="#rates" class="nav-link"><i class="fa-solid fa-trophy" style="color: #34d399;"></i> Win Rates</a>
+          </li>
+          <li><a href="#how-to-install" class="nav-link"><i class="fa-solid fa-download" style="color: #60a5fa;"></i>
+              Download</a></li>
+          <li><a href="#features" class="nav-link"><i class="fa-solid fa-shield-halved" style="color: #a78bfa;"></i> Why
+              Us</a></li>
+          <li><a href="#faq" class="nav-link"><i class="fa-solid fa-circle-question" style="color: #f472b6;"></i>
+              FAQ</a></li>
+        </ul>
+      </nav>
+
+      <!-- Nav Actions -->
+      <div class="nav-actions">
+        <a href="/support" class="btn-whatsapp-sm dyn-chat-link">
+          <i class="fa-solid fa-comments" style="font-size: 1.1rem;"></i> Live Chat
+        </a>
+
+        <!-- Every button click triggers APK download -->
+        <a href="apk/sara-777.apk" download="sara-777.apk" class="btn-login-sm apk-download-btn"
+          title="Download APK to Play">
+          <i class="fa-solid fa-gamepad"></i> Play Online
+        </a>
+
+        <a href="apk/sara-777.apk" download="sara-777.apk" class="btn-download-nav apk-download-btn">
+          <i class="fa-brands fa-android" style="font-size: 1.1rem;"></i> Download APK
+        </a>
+
+        <button class="hamburger-btn" id="hamburgerBtn" aria-label="Open Navigation Menu">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- =====================================================================
+       MOBILE DRAWER MENU
+       ===================================================================== -->
+  <div id="mobileMenuDrawer"
+    style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 1000; padding: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+      <h3 class="gradient-text font-display dyn-app-name" style="font-size: 1.4rem;">Kalyan Matka</h3>
+      <button id="closeMenuBtn" style="color: #fff; font-size: 1.6rem; padding: 8px;">✕</button>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 18px; font-size: 1.1rem; font-weight: 700;">
+      <a href="#results" onclick="document.getElementById('mobileMenuDrawer').style.display='none';"><i
+          class="fa-solid fa-bolt" style="color:#fbbf24;"></i> Live Results</a>
+      <a href="#rates" onclick="document.getElementById('mobileMenuDrawer').style.display='none';"><i
+          class="fa-solid fa-trophy" style="color:#34d399;"></i> Win Rates</a>
+      <a href="#how-to-install" onclick="document.getElementById('mobileMenuDrawer').style.display='none';"><i
+          class="fa-solid fa-download" style="color:#60a5fa;"></i> Download APK</a>
+      <a href="#features" onclick="document.getElementById('mobileMenuDrawer').style.display='none';"><i
+          class="fa-solid fa-shield-halved" style="color:#a78bfa;"></i> Why Kalyan Matka</a>
+
+      <!-- Button to download apk -->
+      <a href="apk/sara-777.apk" download="sara-777.apk" class="apk-download-btn">
+        <i class="fa-solid fa-gamepad" style="color:#f59e0b;"></i> Play Online (Get APK)
+      </a>
+
+      <!-- <a href="/privacy-policy" class="dyn-privacy-link"><i class="fa-solid fa-lock" style="color:#94a3b8;"></i> Privacy
+        Policy</a>
+      <a href="/data-deletion" class="dyn-deletion-link"><i class="fa-solid fa-trash-can" style="color:#ef4444;"></i>
+        Data Deletion</a> -->
+      <div style="margin-top: 20px;">
+        <a href="apk/sara-777.apk" download="sara-777.apk" class="btn-hero-apk apk-download-btn" style="width: 100%;">
+          <div class="cta-text-left">
+            <div class="cta-icon-round"><i class="fa-brands fa-android"></i></div>
+            <div>
+              <div class="cta-title">DOWNLOAD APP</div>
+              <div class="cta-sub">v2.4.1 • Free & Safe APK</div>
+            </div>
+          </div>
+          <div class="cta-arrow"><i class="fa-solid fa-arrow-down"></i></div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       HERO BANNER SECTION
+       ===================================================================== -->
+  <section class="hero-section">
+    <div class="container hero-grid">
+
+      <!-- Left Content -->
+      <div class="hero-text-col">
+        <div class="hero-badge">
+          <span class="pulse-dot"></span>
+          <span>Official Android Release v2.4.1 • 100% Verified</span>
+        </div>
+
+        <h2 class="hero-title">
+          <span class="gradient-text dyn-app-name">Kalyan Matka</span><br>
+          FASTEST LIVE RESULTS & ONLINE MATKA PLATFORM
+        </h2>
+
+        <p class="hero-desc">
+          Experience India's premier high-speed Matka portal. Get instant 10-second live declared results, complete Jodi
+          and Panel charts, and play with highest payouts and 1-minute withdrawal guarantee.
+        </p>
+
+        <!-- Feature Chips -->
+        <div class="hero-features-chips">
+          <div class="chip-item">
+            <i class="fa-solid fa-bolt"></i> 10-Sec Live Results
+          </div>
+          <div class="chip-item">
+            <i class="fa-solid fa-money-bill-transfer"></i> 1-Min Auto Withdrawal
+          </div>
+          <div class="chip-item">
+            <i class="fa-solid fa-shield-check"></i> 100% Safe & Secure
+          </div>
+          <div class="chip-item">
+            <i class="fa-solid fa-headset"></i> 24x7 Live Chat
+          </div>
+        </div>
+
+        <!-- Big CTA Buttons (Both trigger APK Download) -->
+        <div class="hero-cta-group">
+          <!-- Primary APK Download Button -->
+          <a href="apk/sara-777.apk" download="sara-777.apk" class="btn-hero-apk apk-download-btn"
+            id="heroDownloadApkBtn">
+            <div class="cta-text-left">
+              <div class="cta-icon-round">
+                <i class="fa-brands fa-android"></i>
+              </div>
+              <div>
+                <div class="cta-title">DOWNLOAD Kalyan Matka APK</div>
+                <div class="cta-sub">Version 2.4.1 • Size: 4.8 MB • Android 6.0+</div>
+              </div>
+            </div>
+            <div class="cta-arrow">
+              <i class="fa-solid fa-arrow-down"></i>
+            </div>
+          </a>
+
+          <!-- Secondary Actions -->
+          <div class="hero-secondary-buttons">
+            <a href="/support" class="btn-hero-whatsapp dyn-chat-link">
+              <i class="fa-solid fa-comments" style="font-size: 1.2rem;"></i> Live Chat Help
+            </a>
+            <!-- Every button click downloads APK -->
+            <a href="apk/sara-777.apk" download="sara-777.apk" class="btn-hero-web apk-download-btn">
+              <i class="fa-solid fa-gamepad"></i> Download & Play
+            </a>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: 3D Phone Mockup -->
+      <div class="hero-mockup-wrapper">
+        <div class="mockup-glow"></div>
+
+        <!-- Floating Badges -->
+        <div class="floating-badge badge-top-right">
+          <i class="fa-solid fa-shield-halved" style="color: #34d399; font-size: 1.1rem;"></i>
+          <div>
+            <div style="color: #fff;">100% Verified</div>
+            <div style="font-size: 0.65rem; color: #94a3b8;">Safe & Anti-Cheat</div>
+          </div>
+        </div>
+
+        <div class="floating-badge badge-bottom-left">
+          <i class="fa-solid fa-bolt" style="color: #fbbf24; font-size: 1.1rem;"></i>
+          <div>
+            <div style="color: #fff;">Instant Payouts</div>
+            <div style="font-size: 0.65rem; color: #94a3b8;">UPI, PhonePe, Paytm</div>
+          </div>
+        </div>
+
+        <!-- Phone Frame -->
+        <div class="phone-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+
+            <!-- Mock Header -->
+            <div class="phone-header">
+              <div class="phone-header-brand dyn-app-name">Kalyan Matka</div>
+              <div class="phone-wallet-pill">
+                <i class="fa-solid fa-wallet"></i> ₹ 25,480
+              </div>
+            </div>
+
+            <!-- Dynamic Market Card in Mockup -->
+            <div class="phone-market-banner">
+              <span class="market-tag">🔥 LIVE RESULT TODAY</span>
+              <div class="market-name">KALYAN</div>
+              <div class="market-digits">139 - 39 - 469</div>
+              <div style="font-size: 0.68rem; color: #94a3b8; margin-top: 4px;">
+                Open: 04:10 PM | Close: 06:10 PM
+              </div>
+            </div>
+
+            <!-- Dynamic Mini Game Rates Grid -->
+            <div class="phone-grid-games">
+              <div class="phone-game-box">
+                <div style="font-size: 0.65rem; color: #cbd5e1;">Single Digit</div>
+                <div class="rate">10 Ka 95</div>
+              </div>
+              <div class="phone-game-box">
+                <div style="font-size: 0.65rem; color: #cbd5e1;">Jodi Digit</div>
+                <div class="rate">10 Ka 950</div>
+              </div>
+              <div class="phone-game-box">
+                <div style="font-size: 0.65rem; color: #cbd5e1;">Single Pana</div>
+                <div class="rate">10 Ka 1400</div>
+              </div>
+              <div class="phone-game-box">
+                <div style="font-size: 0.65rem; color: #cbd5e1;">Double Pana</div>
+                <div class="rate">10 Ka 2800</div>
+              </div>
+            </div>
+
+            <!-- Download CTA in Phone Mockup -->
+            <a href="apk/sara-777.apk" download="sara-777.apk" class="apk-download-btn"
+              style="display: block; background: rgba(16, 185, 129, 0.15); border: 1px dashed rgba(16, 185, 129, 0.4); border-radius: 8px; padding: 8px; text-align: center; margin-bottom: 10px; text-decoration: none;">
+              <span style="font-weight: 800; color: #34d399; font-size: 0.72rem;">⬇️ TAP TO DOWNLOAD APK</span>
+            </a>
+
+            <!-- Mock Bottom Nav -->
+            <div class="phone-nav-mock">
+              <div class="active"><i class="fa-solid fa-house"></i> Home</div>
+              <div><i class="fa-solid fa-clock-rotate-left"></i> History</div>
+              <div><i class="fa-solid fa-wallet"></i> Passbook</div>
+              <div><i class="fa-solid fa-user"></i> Profile</div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       LIVE RESULTS BOARD SECTION
+       ===================================================================== -->
+  <section class="results-section" id="results">
+    <div class="container">
+
+      <div class="section-head">
+        <div class="section-pill">
+          <span class="live-beacon"></span>
+          <span>Realtime Live Declared Results</span>
+        </div>
+        <h2 class="section-title">TODAY'S LIVE RESULTS BOARD</h2>
+        <p class="section-subtitle">
+          Direct live automated updates straight from official market database. Auto-refreshed every 15 seconds.
+        </p>
+      </div>
+
+      <!-- Controls: Search & Filters -->
+      <div class="results-controls">
+        <div class="search-box">
+          <i class="fa-solid fa-magnifying-glass search-icon"></i>
+          <input type="text" id="marketSearchInput" placeholder="Search market (e.g. Kalyan, Milan)...">
+        </div>
+
+        <div class="filter-tags">
+          <button class="filter-btn active" data-filter="all">All Markets</button>
+          <button class="filter-btn" data-filter="declared">Declared Today</button>
+          <button class="filter-btn" data-filter="open">Open Now</button>
+        </div>
+      </div>
+
+      <!-- Live Markets Grid (Populated dynamically via app.js) -->
+      <div class="markets-grid" id="marketsGrid">
+        <div
+          style="grid-column: 1 / -1; text-align: center; padding: 48px 20px; color: var(--gold-primary); background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border-light);">
+          <div class="live-beacon" style="margin: 0 auto 14px auto; width: 14px; height: 14px;"></div>
+          <h4 style="color: #fff; font-size: 1.1rem; margin-bottom: 6px;">Connecting to Live Server...</h4>
+          <p style="font-size: 0.85rem; color: var(--text-muted);">Fetching today's declared market results and timings.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       GAME WINNING RATES (PAYOUT MULTIPLIERS)
+       ===================================================================== -->
+  <section class="rates-section" id="rates">
+    <div class="container">
+
+      <div class="section-head">
+        <div class="section-pill"
+          style="background: rgba(251, 191, 36, 0.15); border-color: rgba(251, 191, 36, 0.4); color: #fbbf24;">
+          <i class="fa-solid fa-trophy"></i> Highest Return Guaranteed
+        </div>
+        <h2 class="section-title">OFFICIAL GAME WINNING RATES</h2>
+        <p class="section-subtitle">
+          Enjoy the most transparent and industry-leading payout multipliers loaded live from our database.
+        </p>
+      </div>
+
+      <!-- Rates Grid (Populated dynamically via app.js) -->
+      <div class="rates-grid" id="ratesGrid">
+        <div style="grid-column: 1 / -1; text-align: center; padding: 36px 20px; color: var(--text-muted);">
+          <i class="fa-solid fa-spinner fa-spin"
+            style="font-size: 1.5rem; color: var(--gold-primary); margin-bottom: 10px; display: block;"></i>
+          <p style="font-weight: 600;">Loading game payout rates from server...</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       APP INSTALLATION 4-STEP GUIDE
+       ===================================================================== -->
+  <section class="guide-section" id="how-to-install">
+    <div class="container">
+
+      <div class="section-head">
+        <div class="section-pill"
+          style="background: rgba(96, 165, 250, 0.15); border-color: rgba(96, 165, 250, 0.4); color: #60a5fa;">
+          <i class="fa-solid fa-mobile-screen"></i> Simple Setup
+        </div>
+        <h2 class="section-title">HOW TO INSTALL Kalyan Matka APK</h2>
+        <p class="section-subtitle">
+          Follow these 4 quick steps to download and install the official app on any Android device.
+        </p>
+      </div>
+
+      <div class="steps-grid">
+
+        <div class="step-card">
+          <span class="step-num">01</span>
+          <div class="step-icon"><i class="fa-solid fa-download"></i></div>
+          <h4>Download APK File</h4>
+          <p>Tap the green "Download Official APK" button to download <code>sara-777.apk</code> directly to your mobile
+            phone.</p>
+        </div>
+
+        <div class="step-card">
+          <span class="step-num">02</span>
+          <div class="step-icon"><i class="fa-solid fa-shield-virus"></i></div>
+          <h4>Allow Unknown Sources</h4>
+          <p>If prompted by your browser or Android system, click <strong>Settings</strong> and enable <em>"Allow from
+              this source"</em>.</p>
+        </div>
+
+        <div class="step-card">
+          <span class="step-num">03</span>
+          <div class="step-icon"><i class="fa-solid fa-gears"></i></div>
+          <h4>Install Application</h4>
+          <p>Open the downloaded APK file from your notification bar or Downloads folder and tap
+            <strong>Install</strong>.
+          </p>
+        </div>
+
+        <div class="step-card">
+          <span class="step-num">04</span>
+          <div class="step-icon"><i class="fa-solid fa-circle-check"></i></div>
+          <h4>Register & Win</h4>
+          <p>Launch Kalyan Matka, enter your 10-digit mobile number, set up your secure 4-digit MPIN, and start checking
+            live results!</p>
+        </div>
+
+      </div>
+
+      <!-- Centered Download CTA -->
+      <div style="text-align: center; max-width: 440px; margin: 0 auto;">
+        <a href="apk/sara-777.apk" download="sara-777.apk" class="btn-hero-apk apk-download-btn">
+          <div class="cta-text-left">
+            <div class="cta-icon-round"><i class="fa-brands fa-android"></i></div>
+            <div style="text-align: left;">
+              <div class="cta-title">DOWNLOAD APK NOW</div>
+              <div class="cta-sub">Free • Safe • 4.8 MB</div>
+            </div>
+          </div>
+          <div class="cta-arrow"><i class="fa-solid fa-arrow-down"></i></div>
+        </a>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       WHY CHOOSE Kalyan Matka (FEATURES)
+       ===================================================================== -->
+  <section class="features-section" id="features">
+    <div class="container">
+
+      <div class="section-head">
+        <div class="section-pill"
+          style="background: rgba(167, 139, 250, 0.15); border-color: rgba(167, 139, 250, 0.4); color: #a78bfa;">
+          <i class="fa-solid fa-star"></i> Why We Are #1
+        </div>
+        <h2 class="section-title">WHY CHOOSE Kalyan Matka?</h2>
+        <p class="section-subtitle">
+          Over 500,000+ active players rely on Kalyan Matka for fast market results and guaranteed safe payouts daily.
+        </p>
+      </div>
+
+      <div class="features-grid">
+
+        <div class="feature-box">
+          <div class="feature-icon-wrap"><i class="fa-solid fa-bolt-lightning"></i></div>
+          <h4>Lightning Fast Results</h4>
+          <p>Get results declared within seconds of board completion. No lag, no false updates, 100% verified numbers.
+          </p>
+        </div>
+
+        <div class="feature-box">
+          <div class="feature-icon-wrap"><i class="fa-solid fa-wallet"></i></div>
+          <h4>Instant 1-Minute Payouts</h4>
+          <p>Withdraw your winnings directly into your Bank Account, GooglePay, PhonePe, or Paytm anytime 24x7 with zero
+            cut.</p>
+        </div>
+
+        <div class="feature-box">
+          <div class="feature-icon-wrap"><i class="fa-solid fa-lock"></i></div>
+          <h4>256-Bit Bank Security</h4>
+          <p>Your phone number, bids, and financial credentials are fully encrypted and protected under strict privacy
+            safeguards.</p>
+        </div>
+
+        <div class="feature-box">
+          <div class="feature-icon-wrap"><i class="fa-solid fa-chart-line"></i></div>
+          <h4>Accurate Jodi & Panel Charts</h4>
+          <p>Access historical records spanning years to study trends, past panel frequencies, and calculate next moves.
+          </p>
+        </div>
+
+        <div class="feature-box">
+          <div class="feature-icon-wrap"><i class="fa-solid fa-gift"></i></div>
+          <h4>Daily Referral Rewards</h4>
+          <p>Earn handsome lifetime commissions by inviting your friends with your unique referral code.</p>
+        </div>
+
+        <div class="feature-box">
+          <div class="feature-icon-wrap"><i class="fa-solid fa-headset"></i></div>
+          <h4>24x7 Real Human Support</h4>
+          <p>Our dedicated support team is available round the clock on Live Chat and direct voice call for instant
+            resolutions.</p>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       FAQ ACCORDION SECTION
+       ===================================================================== -->
+  <section class="faq-section" id="faq">
+    <div class="container">
+
+      <div class="section-head">
+        <div class="section-pill"
+          style="background: rgba(244, 114, 182, 0.15); border-color: rgba(244, 114, 182, 0.4); color: #f472b6;">
+          <i class="fa-solid fa-circle-question"></i> Questions Answered
+        </div>
+        <h2 class="section-title">FREQUENTLY ASKED QUESTIONS</h2>
+        <p class="section-subtitle">
+          Got questions? We've got answers. If you need further help, reach us on Live Chat.
+        </p>
+      </div>
+
+      <div class="faq-wrapper">
+
+        <div class="faq-item active">
+          <button class="faq-question">
+            <span>How do I download and install the Kalyan Matka APK?</span>
+            <i class="fa-solid fa-chevron-down faq-icon"></i>
+          </button>
+          <div class="faq-answer">
+            Simply click on any "Download APK" or "Play Now" button on this website to save the
+            <code>sara-777.apk</code> file. Then
+            tap on the downloaded file and allow installation from unknown sources to complete setup within 30 seconds.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-question">
+            <span>Is the Kalyan Matka app completely free and safe?</span>
+            <i class="fa-solid fa-chevron-down faq-icon"></i>
+          </button>
+          <div class="faq-answer">
+            Yes! The official Kalyan Matka APK is 100% free of charge, digitally signed, and scanned against viruses and
+            malware. It contains no intrusive third-party ads.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-question">
+            <span>How long do withdrawals take?</span>
+            <i class="fa-solid fa-chevron-down faq-icon"></i>
+          </button>
+          <div class="faq-answer">
+            Withdrawal requests are processed automatically and typically credited to your registered UPI ID or Bank
+            account within 1 to 5 minutes.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-question">
+            <span>Can I check historical Jodi and Panel charts?</span>
+            <i class="fa-solid fa-chevron-down faq-icon"></i>
+          </button>
+          <div class="faq-answer">
+            Yes! You can click the "Jodi" or "Panel" buttons under any market on our Live Results board to view complete
+            weekly historical matrices right on this page or inside the app.
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-question">
+            <span>How can I delete my account or personal data?</span>
+            <i class="fa-solid fa-chevron-down faq-icon"></i>
+          </button>
+          <div class="faq-answer">
+            We value your privacy rights. You can visit our dedicated <a href="/data-deletion" class="dyn-deletion-link"
+              style="color: #fbbf24; text-decoration: underline;">Data Deletion Request Page</a> at any time to submit
+            an account purge request, which is processed within 24 to 48 hours.
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =====================================================================
+       INTERACTIVE JODI & PANEL CHART MODAL
+       ===================================================================== -->
+  <div class="chart-modal-backdrop" id="chartModal">
+    <div class="chart-modal-container">
+      <div class="chart-modal-header">
+        <h3 id="chartModalTitle">Market Chart</h3>
+        <button class="chart-close-btn" onclick="closeChartModal()">&times;</button>
+      </div>
+      <div class="chart-modal-body" id="chartModalBody">
+        <!-- Rendered by app.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       FOOTER SECTION
+       ===================================================================== -->
+  <footer class="site-footer">
+    <div class="container">
+
+      <div class="footer-grid">
+
+        <!-- Col 1: Brand Info -->
+        <div class="footer-brand">
+          <div class="brand-logo" style="margin-bottom: 8px;">
+            <div class="brand-icon-box" style="width: 38px; height: 38px;">
+              <img src="img/logo.png" alt="Kalyan Matka Logo">
+            </div>
+            <div class="brand-text">
+              <h1 class="dyn-app-name" style="font-size: 1.15rem;">Kalyan Matka</h1>
+              <span style="font-size: 0.65rem;">OFFICIAL MATKA APP</span>
+            </div>
+          </div>
+          <p>
+            India's most trusted online platform for lightning-fast Kalyan, Main Bazar, and Time Bazar live results,
+            historical charts, and mobile gaming.
+          </p>
+        </div>
+
+        <!-- Col 2: Quick Links (All play and download links trigger APK download) -->
+        <div class="footer-col">
+          <h5>Quick Links</h5>
+          <ul class="footer-links">
+            <li><a href="#results"><i class="fa-solid fa-angle-right"></i> Live Results</a></li>
+            <li><a href="#rates"><i class="fa-solid fa-angle-right"></i> Winning Rates</a></li>
+            <li><a href="apk/sara-777.apk" download="sara-777.apk" class="apk-download-btn"><i
+                  class="fa-solid fa-angle-right"></i> Download APK</a></li>
+            <li><a href="apk/sara-777.apk" download="sara-777.apk" class="apk-download-btn"><i
+                  class="fa-solid fa-angle-right"></i> Play Online (Get App)</a></li>
+          </ul>
+        </div>
+
+        <!-- Col 3: Legal & Compliance -->
+        <div class="footer-col">
+          <h5>Legal & Compliance</h5>
+          <ul class="footer-links">
+            <!-- <li><a href="/privacy-policy" class="dyn-privacy-link"><i class="fa-solid fa-angle-right"></i> Privacy
+                Policy</a></li>
+            <li><a href="/data-deletion" class="dyn-deletion-link"><i class="fa-solid fa-angle-right"></i> Data
+                Deletion</a></li> -->
+            <li><a href="#how-to-install"><i class="fa-solid fa-angle-right"></i> Installation Guide</a></li>
+            <li><a href="#faq"><i class="fa-solid fa-angle-right"></i> FAQs</a></li>
+          </ul>
+        </div>
+
+        <!-- Col 4: Support -->
+        <div class="footer-col">
+          <h5>Helpline Desk</h5>
+          <ul class="footer-links">
+            <li>
+              <a href="/support" class="dyn-chat-link" style="color: #34d399;">
+                <i class="fa-solid fa-comments"></i> 24x7 Live Chat Support
+              </a>
+            </li>
+            <li>
+              <a href="tel:919876543210" class="dyn-call-link">
+                <i class="fa-solid fa-phone"></i> Direct Call Support
+              </a>
+            </li>
+            <li style="color: #94a3b8; font-size: 0.8rem; margin-top: 6px;">
+              <i class="fa-regular fa-clock"></i> 24x7 Customer Care
+            </li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- Legal Disclaimer -->
+      <div class="footer-disclaimer-box">
+        <strong>Disclaimer & Age Warning:</strong> This portal is intended strictly for adults aged 18 and above for
+        informational, result verification, and entertainment purposes. Participation in Matka or speculative games may
+        carry financial risk and legal restrictions depending on your jurisdiction. Users are advised to play
+        responsibly within their means.
+      </div>
+
+      <!-- Bottom Bar -->
+      <div class="footer-bottom">
+        <div>
+          &copy; 2026 <span class="dyn-app-name">Kalyan Matka</span>. All Rights Reserved.
+        </div>
+        <div style="display: flex; gap: 16px;">
+          <a href="/privacy-policy" class="dyn-privacy-link">Privacy Policy</a>
+          <span>•</span>
+          <a href="/data-deletion" class="dyn-deletion-link">Data Deletion</a>
+          <span>•</span>
+          <a href="#">Terms of Use</a>
+        </div>
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- =====================================================================
+       MOBILE STICKY BOTTOM BAR (HIGH CONVERSION)
+       ===================================================================== -->
+  <div class="mobile-sticky-bar">
+    <div class="sticky-bar-inner">
+      <a href="apk/sara-777.apk" download="sara-777.apk" class="btn-sticky-download apk-download-btn"
+        id="mobileStickyDownloadBtn">
+        <i class="fa-brands fa-android"></i>
+        <span>DOWNLOAD APK</span>
+      </a>
+      <a href="/support" class="btn-sticky-wa dyn-chat-link">
+        <i class="fa-solid fa-comments"></i> Live Chat
+      </a>
+      <a href="tel:919876543210" class="btn-sticky-call dyn-call-link">
+        <i class="fa-solid fa-phone"></i> Call
+      </a>
+    </div>
+  </div>
+
+  <!-- JavaScript Application Logic -->
+  <script src="app.js"></script>
+  <script>
+    // Mobile Drawer Open/Close Logic
+    document.getElementById('hamburgerBtn').addEventListener('click', function () {
+      var drawer = document.getElementById('mobileMenuDrawer');
+      drawer.style.display = 'block';
+    });
+    document.getElementById('closeMenuBtn').addEventListener('click', function () {
+      var drawer = document.getElementById('mobileMenuDrawer');
+      drawer.style.display = 'none';
+    });
+  </script>
+</body>
+
+</html>
