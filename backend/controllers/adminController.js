@@ -1,5 +1,5 @@
 const db = require('../config/db');
-const { getISTDate, getISTDateStr, getISTTimeStr, getISTTime12h, getISTDateTimeStr } = require('../utils/istDate');
+const { getISTDate, getISTDateStr, getISTTimeStr, getISTTime12h, getISTDateTimeStr, compareMarketTimes } = require('../utils/istDate');
 
 // Auto-ensure user_winning_report table columns support DP, SP, TP Pana and flexible types
 async function initWinningReportSchema() {
@@ -3439,6 +3439,8 @@ exports.getAdminGamesList = async (req, res) => {
         market_status: isMarketOpen ? 'Market Running' : 'Market Closed'
       };
     });
+
+    formattedGames.sort(compareMarketTimes);
 
     return res.json({ success: '1', data: formattedGames });
   } catch (err) {

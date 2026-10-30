@@ -92,7 +92,7 @@ const AddFund = () => {
   }, []);
 
   // Quick preset amounts
-  const PRESET_AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
+  const PRESET_AMOUNTS = [300, 500, 1000, 2000, 5000];
 
   // Validation Helpers
   const getMinMaxAmounts = () => {

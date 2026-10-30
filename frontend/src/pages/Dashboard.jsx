@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Play, BarChart3, PlusCircle, ArrowUpRight, Trophy, Percent, Megaphone, Clock, Sparkles, ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react';
 import api from '../utils/api';
+import { compareMarketTimes } from '../utils/timeSort';
 
 const Dashboard = () => {
   const [games, setGames] = useState([]);
+  const [sortBy, setSortBy] = useState('time_asc');
+  const [marketFilter, setMarketFilter] = useState('all');
   const [alertMsg, setAlertMsg] = useState('Welcome to Kalyan Matka! Place your bets wisely.');
   const [welcomeToast, setWelcomeToast] = useState(null);
   const [sliderStatus, setSliderStatus] = useState('1');
@@ -33,7 +36,8 @@ const Dashboard = () => {
       ]);
 
       if (gamesRes?.data?.result) {
-        setGames(gamesRes.data.result);
+        const sorted = [...gamesRes.data.result].sort(compareMarketTimes);
+        setGames(sorted);
       }
 
       if (appRes?.data?.data) {
@@ -126,6 +130,33 @@ const Dashboard = () => {
       return false;
     }
   };
+
+  const sortedGames = useMemo(() => {
+    let list = [...games];
+
+    if (marketFilter === 'open') {
+      list = list.filter(g => isMarketOpen(g));
+    } else if (marketFilter === 'closed') {
+      list = list.filter(g => !isMarketOpen(g));
+    }
+
+    return list.sort((a, b) => {
+      if (sortBy === 'open_first') {
+        const openA = isMarketOpen(a) ? 1 : 0;
+        const openB = isMarketOpen(b) ? 1 : 0;
+        if (openA !== openB) return openB - openA;
+        return compareMarketTimes(a, b);
+      }
+      if (sortBy === 'time_desc') {
+        return compareMarketTimes(b, a);
+      }
+      if (sortBy === 'name_asc') {
+        return (a.games_name || '').localeCompare(b.games_name || '');
+      }
+      // Default: 'time_asc' - Market Time (Earliest Open to Latest)
+      return compareMarketTimes(a, b);
+    });
+  }, [games, sortBy, marketFilter]);
 
   return (
     <div style={{ maxWidth: '1080px', margin: '0 auto', padding: '16px 16px 32px' }}>
@@ -370,29 +401,136 @@ const Dashboard = () => {
         </Link> */}
       </div>
 
-      {/* Markets Section Header */}
+      {/* Markets Section Header & Sorting Controls */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '12px',
         marginBottom: '16px'
       }}>
-        <h4 style={{
-          color: '#ffffff',
-          fontWeight: '800',
-          fontSize: '1.25rem',
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-          margin: 0,
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h4 style={{
+            color: '#ffffff',
+            fontWeight: '800',
+            fontSize: '1.25rem',
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            margin: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <Sparkles size={20} style={{ color: 'var(--color-gold, #d6be66)' }} /> Live Game Markets
+          </h4>
+          <span style={{
+            fontSize: '0.72rem',
+            padding: '3px 8px',
+            borderRadius: '12px',
+            background: 'rgba(214, 190, 102, 0.15)',
+            border: '1px solid rgba(214, 190, 102, 0.3)',
+            color: 'var(--color-gold, #d6be66)',
+            fontWeight: '700'
+          }}>
+            {sortedGames.length} Markets
+          </span>
+        </div>
+
+        {/* Sort & Filter Controls */}
+        <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '8px'
+          gap: '8px',
+          flexWrap: 'wrap'
         }}>
-          <Sparkles size={20} style={{ color: 'var(--color-gold, #d6be66)' }} /> Live Game Markets
-        </h4>
-        <span className="badge-open-v2">
-          ● Active Today
-        </span>
+          {/* Quick Filter: All / Open Only */}
+          <div style={{
+            display: 'inline-flex',
+            backgroundColor: 'rgba(13, 22, 36, 0.85)',
+            borderRadius: '10px',
+            padding: '2px',
+            border: '1px solid rgba(255, 255, 255, 0.08)'
+          }}>
+            <button
+              type="button"
+              onClick={() => setMarketFilter('all')}
+              style={{
+                background: marketFilter === 'all' ? 'rgba(214, 190, 102, 0.2)' : 'transparent',
+                color: marketFilter === 'all' ? 'var(--color-gold, #d6be66)' : 'rgba(255, 255, 255, 0.6)',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '4px 10px',
+                fontSize: '0.74rem',
+                fontWeight: '700',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setMarketFilter('open')}
+              style={{
+                background: marketFilter === 'open' ? 'rgba(16, 185, 129, 0.25)' : 'transparent',
+                color: marketFilter === 'open' ? '#34d399' : 'rgba(255, 255, 255, 0.6)',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '4px 10px',
+                fontSize: '0.74rem',
+                fontWeight: '700',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              ● Open Only
+            </button>
+          </div>
+
+          {/* Sort By Dropdown */}
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            backgroundColor: 'rgba(13, 22, 36, 0.85)',
+            border: '1px solid rgba(214, 190, 102, 0.3)',
+            borderRadius: '10px',
+            padding: '4px 8px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+          }}>
+            <Clock size={14} style={{ color: 'var(--color-gold, #d6be66)', flexShrink: 0 }} />
+            <select
+              id="market-sort-select"
+              aria-label="Sort Live Markets"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#ffffff',
+                fontSize: '0.76rem',
+                fontWeight: '700',
+                cursor: 'pointer',
+                outline: 'none',
+                paddingRight: '4px'
+              }}
+            >
+              <option value="time_asc" style={{ backgroundColor: '#0d192b', color: '#ffffff' }}>
+                ⏰ Time: Earliest First
+              </option>
+              <option value="open_first" style={{ backgroundColor: '#0d192b', color: '#ffffff' }}>
+                🟢 Open Markets First
+              </option>
+              <option value="time_desc" style={{ backgroundColor: '#0d192b', color: '#ffffff' }}>
+                ⏰ Time: Latest First
+              </option>
+              <option value="name_asc" style={{ backgroundColor: '#0d192b', color: '#ffffff' }}>
+                🔤 Name: A to Z
+              </option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {loading ? (
@@ -400,9 +538,31 @@ const Dashboard = () => {
           <div className="spinner" style={{ margin: '0 auto 16px' }} />
           Loading live markets...
         </div>
-      ) : games.length === 0 ? (
+      ) : sortedGames.length === 0 ? (
         <div className="card-glass-v2" style={{ textAlign: 'center', padding: '40px 20px', color: 'rgba(255,255,255,0.7)' }}>
-          No active games found for today.
+          {marketFilter === 'open' ? (
+            <div>
+              <p style={{ margin: '0 0 10px', fontSize: '0.95rem' }}>No open markets available right now.</p>
+              <button
+                type="button"
+                onClick={() => setMarketFilter('all')}
+                style={{
+                  background: 'rgba(214, 190, 102, 0.15)',
+                  border: '1px solid var(--color-gold, #d6be66)',
+                  color: 'var(--color-gold, #d6be66)',
+                  borderRadius: '8px',
+                  padding: '6px 14px',
+                  fontSize: '0.8rem',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                View All Markets
+              </button>
+            </div>
+          ) : (
+            'No active games found for today.'
+          )}
         </div>
       ) : (
         <div style={{
@@ -410,7 +570,7 @@ const Dashboard = () => {
           gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
           gap: '12px'
         }}>
-          {games.map((g) => {
+          {sortedGames.map((g) => {
             const open = isMarketOpen(g);
             return (
               <div

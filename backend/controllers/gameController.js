@@ -1,5 +1,5 @@
 const db = require('../config/db');
-const { getISTDate, getISTDateStr, getISTTimeStr, getISTTime12h } = require('../utils/istDate');
+const { getISTDate, getISTDateStr, getISTTimeStr, getISTTime12h, compareMarketTimes } = require('../utils/istDate');
 
 // Helper to convert time format "hh:mm AM/PM" or "hh:mm" or "hh:mm:ss" to Date object using IST date reference
 function getTodayTime(timeStr, refISTDate = getISTDate()) {
@@ -145,6 +145,9 @@ exports.getGames = async (req, res) => {
         close_digit
       });
     }
+
+    // Sort Live Game Markets chronologically by market open/close time
+    result.sort(compareMarketTimes);
 
     return res.json({ result });
   } catch (err) {

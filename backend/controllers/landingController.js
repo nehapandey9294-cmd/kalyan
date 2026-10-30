@@ -1,5 +1,5 @@
 const db = require('../config/db');
-const { getISTDate, getISTDateStr } = require('../utils/istDate');
+const { getISTDate, getISTDateStr, compareMarketTimes } = require('../utils/istDate');
 
 // Helper to parse time string
 function getTodayTime(timeStr, refISTDate) {
@@ -301,6 +301,8 @@ exports.getLandingMarkets = async (req, res) => {
         is_declared_today: isDeclaredToday
       });
     }
+
+    marketList.sort(compareMarketTimes);
 
     return res.json({ success: '1', data: marketList, ist_date: todayDateStr });
   } catch (err) {
