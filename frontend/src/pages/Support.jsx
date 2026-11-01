@@ -6,7 +6,6 @@ import {
   Headphones,
   ShieldCheck,
   Zap,
-  PhoneCall,
   CheckCheck,
   Check,
   Sparkles,
@@ -162,7 +161,6 @@ const Support = () => {
   const [isSending, setIsSending] = useState(false);
   const [adminTyping, setAdminTyping] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('connecting');
-  const [adminPhone, setAdminPhone] = useState('');
 
   // User and Guest Auth
   const [userPhone, setUserPhone] = useState(() => {
@@ -218,12 +216,6 @@ const Support = () => {
             setMessages(res.data.data);
             setTimeout(() => scrollToBottom('auto'), 150);
           }
-        }
-
-        // Fetch support helpline phone
-        const infoRes = await api.get('/wallet/info').catch(() => null);
-        if (isMounted && infoRes?.data?.data) {
-          setAdminPhone(infoRes.data.data.admin_mobile || '');
         }
       } catch (err) {
         console.error('Support fetch error:', err);
@@ -494,9 +486,6 @@ const Support = () => {
     }
   };
 
-  const cleanAdminDigits = adminPhone.replace(/\D/g, '');
-  const helplineCall = cleanAdminDigits ? `tel:+91${cleanAdminDigits.slice(-10)}` : null;
-
   return (
     <div style={{
       maxWidth: '720px',
@@ -592,30 +581,6 @@ const Support = () => {
             </p>
           </div>
         </div>
-
-        {/* Call Helpline Button */}
-        {helplineCall && (
-          <a
-            href={helplineCall}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              borderRadius: '20px',
-              background: 'rgba(16, 185, 129, 0.15)',
-              border: '1px solid rgba(16, 185, 129, 0.4)',
-              color: '#10b981',
-              fontSize: '0.78rem',
-              fontWeight: '700',
-              textDecoration: 'none'
-            }}
-            title="Call Support Helpline"
-          >
-            <PhoneCall size={14} />
-            <span>Call Helpline</span>
-          </a>
-        )}
       </div>
 
       {/* Main Chat Box Container */}
