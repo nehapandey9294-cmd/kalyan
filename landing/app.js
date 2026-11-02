@@ -2,7 +2,7 @@
  * SARA 777 - OFFICIAL LANDING PAGE JAVASCRIPT
  * Features:
  * - Brand: Sara 777
- * - Every Action Button downloads the APK (Kalyan-Matka.apk)
+ * - Every Action Button downloads the APK (Bharat-Matka.apk)
  * - Fetches 100% dynamic live data from Backend API:
  *   - Real-time market results & timings (/api/landing/markets)
  *   - Game payout rates from DB (/api/landing/rates & /api/landing/info)
@@ -125,14 +125,14 @@ async function fetchFromApi(endpoint) {
 
 
 // State Configuration
-const APK_STORE_FILE = 'apk/Kalyan-Matka.apk';
+const APK_STORE_FILE = 'apk/Bharat-Matka.apk';
 
 let appConfig = {
-  appName: 'Kalyan Matka',
+  appName: 'Bharat Matka',
   appLink: APK_STORE_FILE,
   mobile: '',
   wpMobile: '',
-  alertMessage: "⚡ Welcome to Kalyan Matka! India's No.1 Live Matka Result Portal. Download Official Android App now for fastest Kalyan, Time Bazar & Main Bazar results! Fast automatic withdrawals & 24x7 Live Chat support available.",
+  alertMessage: "⚡ Welcome to Bharat Matka! India's No.1 Live Matka Result Portal. Download Official Android App now for fastest Kalyan, Time Bazar & Main Bazar results! Fast automatic withdrawals & 24x7 Live Chat support available.",
   privacyPolicyUrl: '/privacy-policy',
   dataDeletionUrl: '/data-deletion'
 };
@@ -149,7 +149,7 @@ function triggerApkDownload(e) {
   }
   const a = document.createElement('a');
   a.href = APK_STORE_FILE;
-  a.setAttribute('download', 'Kalyan-Matka.apk');
+  a.setAttribute('download', 'Bharat-Matka.apk');
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -252,7 +252,7 @@ function applyBrandingDOM() {
   // Ensure all APK Download Buttons link directly to stored apk file in apk/ folder
   document.querySelectorAll('.apk-download-btn, a[download], .btn-download-nav, .btn-hero-apk, .btn-login-sm, .btn-hero-web, .btn-sticky-download, .btn-play-card').forEach(el => {
     el.setAttribute('href', APK_STORE_FILE);
-    el.setAttribute('download', 'Kalyan-Matka.apk');
+    el.setAttribute('download', 'Bharat-Matka.apk');
   });
 
   // Update Live Chat Support Links
@@ -394,7 +394,7 @@ function renderLiveMarketsDOM() {
     return;
   }
 
-  const apkUrl = appConfig.appLink || 'apk/Kalyan-Matka.apk';
+  const apkUrl = appConfig.appLink || 'apk/Bharat-Matka.apk';
 
   container.innerHTML = filtered.map(m => {
     const isDeclared = m.is_declared_today;
@@ -444,7 +444,7 @@ function renderLiveMarketsDOM() {
             <i class="fa-solid fa-chart-simple"></i> Panel
           </button>
           <!-- Play Now triggers APK download from apk/ folder -->
-          <a href="${APK_STORE_FILE}" download="Kalyan-Matka.apk" class="btn-play-card apk-download-btn">
+          <a href="${APK_STORE_FILE}" download="Bharat-Matka.apk" class="btn-play-card apk-download-btn">
             <i class="fa-solid fa-download"></i> Play Now
           </a>
         </div>
@@ -621,7 +621,7 @@ function initEventListeners() {
     const btn = e.target.closest('.apk-download-btn, .btn-play-card, .btn-login-sm, .btn-hero-web, .btn-download-nav, .btn-hero-apk, .btn-sticky-download, a[href*="apk"]');
     if (btn) {
       btn.setAttribute('href', APK_STORE_FILE);
-      btn.setAttribute('download', 'Kalyan-Matka.apk');
+      btn.setAttribute('download', 'Bharat-Matka.apk');
     }
   });
 

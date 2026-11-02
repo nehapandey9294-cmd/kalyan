@@ -3896,5 +3896,24 @@ exports.processReferralCommission = async (userPhone, triggerType, triggerAmount
   }
 };
 
+// Export full database SQL backup for download
+exports.downloadDatabaseBackup = async (req, res) => {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const dbName = process.env.DB_NAME || 'database';
+    const filename = `db_backup_${dbName}_${timestamp}.sql`;
 
+    res.setHeader('Content-Type', 'application/sql; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
+    const { dumpDatabaseToStream } = require('../utils/dbDumper');
+    await dumpDatabaseToStream(res);
+    res.end();
+  } catch (err) {
+    console.error('Error in downloadDatabaseBackup:', err);
+    if (!res.headersSent) {
+      return res.status(500).json({ success: '0', error: 'Failed to generate database dump: ' + err.message });
+    }
+    res.end();
+  }
+};

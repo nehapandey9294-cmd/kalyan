@@ -22,12 +22,30 @@ const localUploads = path.join(__dirname, 'uploads');
 if (!fs.existsSync(localUploads)) fs.mkdirSync(localUploads, { recursive: true });
 app.use('/uploads', express.static(localUploads));
 
-// Auto-sync Kalyan-Matka.apk to PlayStore, landing, and backend folders
+// Auto-sync Bharat-Matka.apk to PlayStore, landing, Application, and backend folders
 try {
   const rootDir = path.join(__dirname, '..');
-  const srcApk = path.join(rootDir, 'Application', 'app', 'release', 'app-release.apk');
-  if (fs.existsSync(srcApk)) {
+  const sourceCandidates = [
+    path.join(rootDir, 'PlayStore', 'apk', 'Bharat-Matka.apk'),
+    path.join(rootDir, 'PlayStore', 'Bharat-Matka.apk'),
+    path.join(rootDir, 'landing', 'apk', 'Bharat-Matka.apk'),
+    path.join(rootDir, 'landing', 'public', 'apk', 'Bharat-Matka.apk'),
+    path.join(__dirname, 'uploads', 'Bharat-Matka.apk'),
+    path.join(rootDir, 'Application', 'app', 'release', 'Bharat-Matka.apk'),
+    path.join(rootDir, 'Application', 'app', 'release', 'app-release.apk'),
+    path.join(rootDir, 'PlayStore', 'apk', 'Kalyan-Matka.apk')
+  ];
+
+  const srcApk = sourceCandidates.find(p => fs.existsSync(p));
+  if (srcApk) {
     const targets = [
+      path.join(rootDir, 'PlayStore', 'Bharat-Matka.apk'),
+      path.join(rootDir, 'PlayStore', 'apk', 'Bharat-Matka.apk'),
+      path.join(rootDir, 'landing', 'apk', 'Bharat-Matka.apk'),
+      path.join(rootDir, 'landing', 'public', 'apk', 'Bharat-Matka.apk'),
+      path.join(__dirname, 'uploads', 'Bharat-Matka.apk'),
+      path.join(rootDir, 'Application', 'app', 'release', 'Bharat-Matka.apk'),
+      // Also update legacy Kalyan-Matka.apk paths with the new binary
       path.join(rootDir, 'PlayStore', 'Kalyan-Matka.apk'),
       path.join(rootDir, 'PlayStore', 'apk', 'Kalyan-Matka.apk'),
       path.join(rootDir, 'landing', 'apk', 'Kalyan-Matka.apk'),
@@ -40,7 +58,7 @@ try {
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       if (!fs.existsSync(tgt) || fs.statSync(tgt).size !== fs.statSync(srcApk).size) {
         fs.copyFileSync(srcApk, tgt);
-        console.log(`[APK Sync] Copied APK -> ${tgt}`);
+        console.log(`[APK Sync] Copied Bharat-Matka.apk -> ${tgt}`);
       }
     });
   }
@@ -64,16 +82,18 @@ app.use('/apk', express.static(path.join(__dirname, '..', 'landing', 'public', '
 app.use('/apk', express.static(path.join(__dirname, '..', 'landing', 'apk'), apkStaticOptions));
 app.use('/PlayStore', express.static(path.join(__dirname, '..', 'PlayStore'), apkStaticOptions));
 
-app.get('/api/download-apk', (req, res) => {
+app.get(['/api/download-apk', '/api/download-apk/Bharat-Matka.apk', '/api/download-apk/Kalyan-Matka.apk'], (req, res) => {
   const possiblePaths = [
+    path.join(__dirname, '..', 'PlayStore', 'apk', 'Bharat-Matka.apk'),
+    path.join(__dirname, '..', 'PlayStore', 'Bharat-Matka.apk'),
+    path.join(__dirname, '..', 'landing', 'apk', 'Bharat-Matka.apk'),
+    path.join(__dirname, '..', 'landing', 'public', 'apk', 'Bharat-Matka.apk'),
+    path.join(__dirname, 'uploads', 'Bharat-Matka.apk'),
+    path.join(__dirname, '..', 'Application', 'app', 'release', 'Bharat-Matka.apk'),
     path.join(__dirname, '..', 'PlayStore', 'Kalyan-Matka.apk'),
     path.join(__dirname, '..', 'PlayStore', 'apk', 'Kalyan-Matka.apk'),
     path.join(__dirname, '..', 'landing', 'apk', 'Kalyan-Matka.apk'),
-    path.join(__dirname, '..', 'landing', 'public', 'apk', 'Kalyan-Matka.apk'),
-    path.join(__dirname, 'uploads', 'Kalyan-Matka.apk'),
-    path.join(__dirname, '..', 'Application', 'app', 'release', 'Kalyan-Matka.apk'),
-    path.join(__dirname, '..', 'Application', 'app', 'release', 'app-release.apk'),
-    path.join(__dirname, '..', 'landing', 'apk', 'sara-777.apk')
+    path.join(__dirname, 'uploads', 'Kalyan-Matka.apk')
   ];
 
   const targetApk = possiblePaths.find(p => fs.existsSync(p));
@@ -81,7 +101,7 @@ app.get('/api/download-apk', (req, res) => {
   if (targetApk) {
     res.setHeader('Content-Type', 'application/vnd.android.package-archive');
     res.setHeader('Cache-Control', 'public, max-age=86400');
-    return res.download(targetApk, 'Kalyan-Matka.apk');
+    return res.download(targetApk, 'Bharat-Matka.apk');
   } else {
     return res.status(404).json({ success: '0', msg: 'APK file not found' });
   }

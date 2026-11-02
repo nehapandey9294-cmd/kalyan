@@ -417,6 +417,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState('');
   const [settingsError, setSettingsError] = useState('');
+  const [downloadingDb, setDownloadingDb] = useState(false);
 
   const [contactLoading, setContactLoading] = useState(false);
   const [contactMsg, setContactMsg] = useState('');
@@ -1135,6 +1136,34 @@ const AdminDashboard = ({ setAdminAuth }) => {
       console.error(err);
     } finally {
       setSettingsLoading(false);
+    }
+  };
+
+  const handleDownloadDatabaseBackup = async () => {
+    setDownloadingDb(true);
+    setSettingsMsg('');
+    setSettingsError('');
+    try {
+      const res = await api.get('/admin/backup-db', {
+        ...getHeaders(),
+        responseType: 'blob'
+      });
+      const blob = new Blob([res.data], { type: 'application/sql' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      a.download = `database_backup_${dateStr}.sql`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setSettingsMsg('Full database SQL backup downloaded successfully!');
+    } catch (err) {
+      console.error('Error downloading DB backup:', err);
+      setSettingsError('Failed to download database backup: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setDownloadingDb(false);
     }
   };
 
@@ -2775,6 +2804,9 @@ const AdminDashboard = ({ setAdminAuth }) => {
                 </div>
                 <div onClick={() => handleTabClick('how_to_play')} style={submenuItemStyle(activeTab === 'how_to_play')}>
                   How To Play
+                </div>
+                <div onClick={handleDownloadDatabaseBackup} style={{ ...submenuItemStyle(false), color: '#34c38f', fontWeight: '600', cursor: downloadingDb ? 'wait' : 'pointer' }}>
+                  {downloadingDb ? '⏳ Exporting DB...' : '💾 Download SQL Backup'}
                 </div>
               </div>
             )}
@@ -6891,6 +6923,62 @@ const AdminDashboard = ({ setAdminAuth }) => {
                 </div>
               )}
 
+              {/* Database Backup & Export Card */}
+              <div style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '8px',
+                padding: '20px 24px',
+                border: '1px solid #bbf7d0',
+                background: 'linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%)',
+                boxShadow: '0 0.75rem 1.5rem rgba(18,38,63,.03)',
+                marginBottom: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '16px'
+              }}>
+                <div style={{ flex: '1 1 300px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '1.4rem' }}>💾</span>
+                    <h5 style={{ margin: 0, fontSize: '1.05rem', color: '#166534', fontWeight: '700' }}>
+                      Database Backup & Export (.SQL)
+                    </h5>
+                    <span style={{ backgroundColor: '#dcfce7', color: '#15803d', fontSize: '0.72rem', fontWeight: '700', padding: '2px 8px', borderRadius: '12px', border: '1px solid #bbf7d0' }}>
+                      Full MySQL Dump
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.84rem', color: '#4b5563', lineHeight: '1.5' }}>
+                    Download the complete database as an SQL file (all tables: users, bids, winning reports, wallet histories, payment gateways, and system settings).
+                  </p>
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadDatabaseBackup}
+                    disabled={downloadingDb}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      backgroundColor: downloadingDb ? '#9ca3af' : '#16a34a',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '10px 22px',
+                      fontSize: '0.92rem',
+                      fontWeight: '600',
+                      cursor: downloadingDb ? 'wait' : 'pointer',
+                      boxShadow: '0 2px 6px rgba(22, 163, 74, 0.25)',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <span>{downloadingDb ? '⏳' : '📥'}</span>
+                    {downloadingDb ? 'Generating SQL Backup...' : 'Download Full Database SQL'}
+                  </button>
+                </div>
+              </div>
+
               {/* Top Row: Bank Details & UPI/QR */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '20px', marginBottom: '24px' }}>
                 {/* 1. Add Bank Details */}
@@ -7162,7 +7250,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
                         </label>
                         <input
                           type="text"
-                          placeholder="https://yourdomain.com/apk/Kalyan-Matka.apk"
+                          placeholder="https://yourdomain.com/apk/Bharat-Matka.apk"
                           value={settingsData.app_link || ''}
                           onChange={(e) => setSettingsData({ ...settingsData, app_link: e.target.value })}
                           style={{ width: '100%', padding: '10px 14px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem' }}

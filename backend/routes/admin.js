@@ -48,6 +48,9 @@ router.post('/reports/bid-history/delete', verifyAdmin, adminController.deleteBi
 router.get('/settings', verifyAdmin, adminController.getSettings);
 router.post('/settings', verifyAdmin, adminController.updateSettings);
 router.post('/settings/update', verifyAdmin, adminController.updateSettings);
+router.get('/backup-db', verifyAdmin, adminController.downloadDatabaseBackup);
+router.get('/database/backup', verifyAdmin, adminController.downloadDatabaseBackup);
+router.get('/download-database', verifyAdmin, adminController.downloadDatabaseBackup);
 
 router.get('/contact-settings', verifyAdmin, adminController.getSettings);
 router.post('/contact-settings', verifyAdmin, adminController.updateContact);
