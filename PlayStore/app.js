@@ -11,8 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function triggerDownload() {
     const apkLink = document.createElement('a');
-    apkLink.href = 'apk/Bharat-Matka.apk';
-    apkLink.download = 'Bharat-Matka.apk';
+    apkLink.href = 'Kalyan-Matka.apk';
+    apkLink.download = 'Kalyan-Matka.apk';
     document.body.appendChild(apkLink);
     apkLink.click();
     setTimeout(() => {
@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </svg>
           <span>Downloading 0%</span>
         `;
-        showToast('Download started for Bharat-Matka.apk...');
+        showToast('Download started for Kalyan-Matka.apk...');
 
         let progress = 0;
         const progressInterval = setInterval(() => {
@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
             installBtn.classList.remove('installing');
             installBtn.classList.add('installed');
             installText.textContent = 'Open';
-            showToast('✓ Bharat-Matka.apk downloaded successfully!');
+            showToast('✓ Kalyan-Matka.apk downloaded successfully!');
           } else {
             installText.innerHTML = `
               <svg class="gp-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="animation: spin 1s linear infinite;">
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }, 250);
       } else if (installState === 'installed') {
-        showToast('Downloading Bharat-Matka.apk again...');
+        showToast('Downloading Kalyan-Matka.apk again...');
         triggerDownload();
       }
     });
