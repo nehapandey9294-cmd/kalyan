@@ -1,3 +1,5 @@
+const https = require('https');
+const http = require('http');
 const db = require('../config/db');
 const { getISTDate, getISTDateStr, getISTTimeStr, getISTTime12h, getISTDateTimeStr, compareMarketTimes } = require('../utils/istDate');
 
@@ -1000,233 +1002,217 @@ async function revertWinnersForGame(gameName, date, session) {
   return { revertedCount: winners.length, totalAmount: totalReverted };
 }
 
-// Declare Game Result & Distribute Payouts (supports updating existing results with automatic wallet deduction & re-credit)
+// Internal helper function for declaring result and distributing payouts
+const executeDeclareResultLogic = async (game_name, date, session, open_pana, open_result, close_pana, close_result) => {
+  const sessionKey = session.toLowerCase();
+  const panaVal = sessionKey === 'open' ? 'open_panna' : 'close_panna';
+  const digitVal = sessionKey === 'open' ? 'open_digit' : 'close_digit';
+  const declaredPana = sessionKey === 'open' ? open_pana : close_pana;
+  const declaredDigit = sessionKey === 'open' ? open_result : close_result;
+
+  if (!declaredPana || !declaredDigit) {
+    throw new Error('Winning pana and digit are required!');
+  }
+
+  // 1. Check if result already declared
+  const [checkChart] = await db.query(
+    'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?) AND TRIM(LOWER(game_name)) = TRIM(LOWER(?))',
+    [date, date, `${date}%`, game_name]
+  );
+
+  let isUpdate = false;
+  let revertedCount = 0;
+
+  if (checkChart.length > 0) {
+    const row = checkChart[0];
+    if (sessionKey === 'close') {
+      if (!row.open_panna || !row.open_digit) {
+        throw new Error('Please declare Open Result first!');
+      }
+      if (row.close_panna && row.close_digit) {
+        const rev = await revertWinnersForGame(game_name, date, 'close');
+        revertedCount = rev.revertedCount;
+        isUpdate = true;
+      }
+      await db.query(
+        `UPDATE result_chart SET ${panaVal} = ?, ${digitVal} = ? WHERE id = ?`,
+        [declaredPana, declaredDigit, row.id]
+      );
+    } else {
+      if (row.open_panna && row.open_digit) {
+        const rev = await revertWinnersForGame(game_name, date, 'open');
+        revertedCount = rev.revertedCount;
+        isUpdate = true;
+      }
+      await db.query(
+        `UPDATE result_chart SET ${panaVal} = ?, ${digitVal} = ? WHERE id = ?`,
+        [declaredPana, declaredDigit, row.id]
+      );
+    }
+  } else {
+    if (sessionKey === 'close') {
+      throw new Error('Please declare Open Result first!');
+    }
+    await db.query(
+      'INSERT INTO result_chart (game_name, date, open_panna, open_digit, close_panna, close_digit, status) VALUES (?, ?, ?, ?, "", "", "1")',
+      [game_name, date, declaredPana, declaredDigit]
+    );
+  }
+
+  // 2. Process winners based on declared results
+  if (sessionKey === 'open') {
+    const openPanaQuery = `
+      SELECT * FROM user_bid_history 
+      WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+      AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
+      AND LOWER(session) = 'open'
+      AND (
+        TRIM(open_pana) = TRIM(?) 
+        OR (TRIM(open_pana) = 'NA' AND TRIM(close_pana) = TRIM(?))
+      )
+      AND game_type != 'Half Sangam' AND game_type != 'Full Sangam'
+    `;
+    await processWinners(db, game_name, date, openPanaQuery, [game_name, date, date, `${date}%`, declaredPana, declaredPana], 'pana', 'Single Pana', declaredPana, declaredDigit, 'N/A', 'N/A', 'Open');
+
+    const openDigitQuery = `
+      SELECT * FROM user_bid_history 
+      WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+      AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
+      AND LOWER(session) = 'open'
+      AND (
+        open_digit = ? 
+        OR (open_digit = 'NA' AND close_digit = ?)
+      )
+      AND (game_type = 'Single Digit' OR game_type = 'Single Ank')
+    `;
+    await processWinners(db, game_name, date, openDigitQuery, [game_name, date, date, `${date}%`, declaredDigit, declaredDigit], 'digit', 'Single Digit', declaredPana, declaredDigit, 'N/A', 'N/A', 'Open');
+
+    const [[updatedChartRow]] = await db.query(
+      'SELECT * FROM result_chart WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?) LIMIT 1',
+      [game_name, date, date, `${date}%`]
+    );
+    if (updatedChartRow && updatedChartRow.close_panna && updatedChartRow.close_digit) {
+      const openRe = declaredDigit;
+      const closeRe = updatedChartRow.close_digit;
+      const openPa = declaredPana;
+      const closePa = updatedChartRow.close_panna;
+
+      const jodiQuery = `
+        SELECT * FROM user_bid_history 
+        WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+        AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
+        AND (game_type = 'Jodi Digit' OR game_type = 'Jodi' OR game_type LIKE '%Jodi%' OR game_type = 'Red Bracket') 
+        AND open_digit = ? AND close_digit = ?
+      `;
+      await processWinners(db, game_name, date, jodiQuery, [game_name, date, date, `${date}%`, openRe, closeRe], 'jodi', 'Jodi Digit', openPa, openRe, closePa, closeRe, 'Close');
+
+      const halfSangamQuery = `
+        SELECT * FROM user_bid_history 
+        WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+        AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
+        AND game_type = 'Half Sangam' 
+        AND ((open_digit = ? AND close_pana = ?) OR (open_pana = ? AND close_digit = ?))
+      `;
+      await processWinners(db, game_name, date, halfSangamQuery, [game_name, date, date, `${date}%`, openRe, closePa, openPa, closeRe], 'sangam', 'Half Sangam', openPa, openRe, closePa, closeRe, 'Close');
+
+      const fullSangamQuery = `
+        SELECT * FROM user_bid_history 
+        WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+        AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
+        AND game_type = 'Full Sangam' 
+        AND open_pana = ? AND close_pana = ?
+      `;
+      await processWinners(db, game_name, date, fullSangamQuery, [game_name, date, date, `${date}%`, openPa, closePa], 'sangam', 'Full Sangam', openPa, openRe, closePa, closeRe, 'Close');
+    }
+  } else {
+    const [[chartRow]] = await db.query(
+      'SELECT * FROM result_chart WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?)',
+      [game_name, date, date, `${date}%`]
+    );
+    const prevOpenPa = chartRow ? chartRow.open_panna : 'N/A';
+    const prevOpenRe = chartRow ? chartRow.open_digit : 'N/A';
+
+    const closePanaQuery = `
+      SELECT * FROM user_bid_history 
+      WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+      AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
+      AND LOWER(session) = 'close'
+      AND (
+        TRIM(close_pana) = TRIM(?) 
+        OR (TRIM(close_pana) = 'NA' AND TRIM(open_pana) = TRIM(?))
+      )
+      AND game_type != 'Half Sangam' AND game_type != 'Full Sangam'
+    `;
+    await processWinners(db, game_name, date, closePanaQuery, [game_name, date, date, `${date}%`, declaredPana, declaredPana], 'pana', 'Single Pana', prevOpenPa, prevOpenRe, declaredPana, declaredDigit, 'Close');
+
+    const closeDigitQuery = `
+      SELECT * FROM user_bid_history 
+      WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+      AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
+      AND LOWER(session) = 'close'
+      AND (
+        close_digit = ? 
+        OR (close_digit = 'NA' AND open_digit = ?)
+      )
+      AND (game_type = 'Single Digit' OR game_type = 'Single Ank')
+    `;
+    await processWinners(db, game_name, date, closeDigitQuery, [game_name, date, date, `${date}%`, declaredDigit, declaredDigit], 'digit', 'Single Digit', prevOpenPa, prevOpenRe, declaredPana, declaredDigit, 'Close');
+
+    if (chartRow) {
+      const openRe = chartRow.open_digit;
+      const closeRe = declaredDigit;
+      const openPa = chartRow.open_panna;
+      const closePa = declaredPana;
+
+      const jodiQuery = `
+        SELECT * FROM user_bid_history 
+        WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+        AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
+        AND (game_type = 'Jodi Digit' OR game_type = 'Jodi' OR game_type LIKE '%Jodi%' OR game_type = 'Red Bracket') 
+        AND open_digit = ? AND close_digit = ?
+      `;
+      await processWinners(db, game_name, date, jodiQuery, [game_name, date, date, `${date}%`, openRe, closeRe], 'jodi', 'Jodi Digit', openPa, openRe, closePa, closeRe, 'Close');
+
+      const halfSangamQuery = `
+        SELECT * FROM user_bid_history 
+        WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+        AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
+        AND game_type = 'Half Sangam' 
+        AND ((open_digit = ? AND close_pana = ?) OR (open_pana = ? AND close_digit = ?))
+      `;
+      await processWinners(db, game_name, date, halfSangamQuery, [game_name, date, date, `${date}%`, openRe, closePa, openPa, closeRe], 'sangam', 'Half Sangam', openPa, openRe, closePa, closeRe, 'Close');
+
+      const fullSangamQuery = `
+        SELECT * FROM user_bid_history 
+        WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+        AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
+        AND game_type = 'Full Sangam' 
+        AND open_pana = ? AND close_pana = ?
+      `;
+      await processWinners(db, game_name, date, fullSangamQuery, [game_name, date, date, `${date}%`, openPa, closePa], 'sangam', 'Full Sangam', openPa, openRe, closePa, closeRe, 'Close');
+    }
+  }
+
+  const successMsg = isUpdate
+    ? `Result updated successfully! Reverted ${revertedCount} previous winner payout(s) from user wallets and credited new winners.`
+    : 'Result Declared and Winners credited successfully!';
+
+  return { success: '1', msg: successMsg };
+};
+
+// Declare Game Result & Distribute Payouts
 exports.declareResult = async (req, res) => {
   const { game_name, date, session, open_pana, open_result, close_pana, close_result } = req.body;
-
   if (!game_name || !date || !session) {
     return res.json({ success: '0', msg: 'Game name, date and session are required!' });
   }
 
   try {
-    const sessionKey = session.toLowerCase();
-    const panaVal = sessionKey === 'open' ? 'open_panna' : 'close_panna';
-    const digitVal = sessionKey === 'open' ? 'open_digit' : 'close_digit';
-    const declaredPana = sessionKey === 'open' ? open_pana : close_pana;
-    const declaredDigit = sessionKey === 'open' ? open_result : close_result;
-
-    if (!declaredPana || !declaredDigit) {
-      return res.json({ success: '0', msg: 'Winning pana and digit are required!' });
-    }
-
-    // 1. Check if result already declared
-    const [checkChart] = await db.query(
-      'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?) AND TRIM(LOWER(game_name)) = TRIM(LOWER(?))',
-      [date, date, `${date}%`, game_name]
-    );
-
-    let isUpdate = false;
-    let revertedCount = 0;
-
-    if (checkChart.length > 0) {
-      const row = checkChart[0];
-      if (sessionKey === 'close') {
-        if (!row.open_panna || !row.open_digit) {
-          return res.json({ success: '0', msg: 'Please declare Open Result first!' });
-        }
-        if (row.close_panna && row.close_digit) {
-          // Re-declaring / updating Close result:
-          // Revert previous close winners AND previous Jodi / Sangam winners
-          const rev = await revertWinnersForGame(game_name, date, 'close');
-          revertedCount = rev.revertedCount;
-          isUpdate = true;
-        }
-        // Update close result
-        await db.query(
-          `UPDATE result_chart SET ${panaVal} = ?, ${digitVal} = ? WHERE id = ?`,
-          [declaredPana, declaredDigit, row.id]
-        );
-      } else {
-        // sessionKey === 'open'
-        if (row.open_panna && row.open_digit) {
-          // Re-declaring / updating Open result:
-          // Revert previous open winners AND previous Jodi / Sangam winners (since Jodi depends on open!)
-          const rev = await revertWinnersForGame(game_name, date, 'open');
-          revertedCount = rev.revertedCount;
-          isUpdate = true;
-        }
-        // Update open result
-        await db.query(
-          `UPDATE result_chart SET ${panaVal} = ?, ${digitVal} = ? WHERE id = ?`,
-          [declaredPana, declaredDigit, row.id]
-        );
-      }
-    } else {
-      if (sessionKey === 'close') {
-        return res.json({ success: '0', msg: 'Please declare Open Result first!' });
-      }
-      // Insert new open result
-      await db.query(
-        'INSERT INTO result_chart (game_name, date, open_panna, open_digit, close_panna, close_digit, status) VALUES (?, ?, ?, ?, "", "", "1")',
-        [game_name, date, declaredPana, declaredDigit]
-      );
-    }
-
-    // 2. Process winners based on declared results
-    if (sessionKey === 'open') {
-      // Open Pana Winners (Single Pana, Double Pana, Triple Pana, SP Motor, DP Motor)
-      const openPanaQuery = `
-        SELECT * FROM user_bid_history 
-        WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
-        AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
-        AND LOWER(session) = 'open'
-        AND (
-          TRIM(open_pana) = TRIM(?) 
-          OR (TRIM(open_pana) = 'NA' AND TRIM(close_pana) = TRIM(?))
-        )
-        AND game_type != 'Half Sangam' AND game_type != 'Full Sangam'
-      `;
-      await processWinners(db, game_name, date, openPanaQuery, [game_name, date, date, `${date}%`, declaredPana, declaredPana], 'pana', 'Single Pana', declaredPana, declaredDigit, 'N/A', 'N/A', 'Open');
-
-      // Open Digit Winners
-      const openDigitQuery = `
-        SELECT * FROM user_bid_history 
-        WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
-        AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
-        AND LOWER(session) = 'open'
-        AND (
-          open_digit = ? 
-          OR (open_digit = 'NA' AND close_digit = ?)
-        )
-        AND (game_type = 'Single Digit' OR game_type = 'Single Ank')
-      `;
-      await processWinners(db, game_name, date, openDigitQuery, [game_name, date, date, `${date}%`, declaredDigit, declaredDigit], 'digit', 'Single Digit', declaredPana, declaredDigit, 'N/A', 'N/A', 'Open');
-
-      // If Close result was already declared in chart, also process new Jodi & Sangam winners!
-      const [[updatedChartRow]] = await db.query(
-        'SELECT * FROM result_chart WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?) LIMIT 1',
-        [game_name, date, date, `${date}%`]
-      );
-      if (updatedChartRow && updatedChartRow.close_panna && updatedChartRow.close_digit) {
-        const openRe = declaredDigit;
-        const closeRe = updatedChartRow.close_digit;
-        const openPa = declaredPana;
-        const closePa = updatedChartRow.close_panna;
-
-        // Jodi Winners
-        const jodiQuery = `
-          SELECT * FROM user_bid_history 
-          WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
-          AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
-          AND (game_type = 'Jodi Digit' OR game_type = 'Jodi' OR game_type LIKE '%Jodi%' OR game_type = 'Red Bracket') 
-          AND open_digit = ? AND close_digit = ?
-        `;
-        await processWinners(db, game_name, date, jodiQuery, [game_name, date, date, `${date}%`, openRe, closeRe], 'jodi', 'Jodi Digit', openPa, openRe, closePa, closeRe, 'Close');
-
-        // Half Sangam Winners
-        const halfSangamQuery = `
-          SELECT * FROM user_bid_history 
-          WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
-          AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
-          AND game_type = 'Half Sangam' 
-          AND ((open_digit = ? AND close_pana = ?) OR (open_pana = ? AND close_digit = ?))
-        `;
-        await processWinners(db, game_name, date, halfSangamQuery, [game_name, date, date, `${date}%`, openRe, closePa, openPa, closeRe], 'sangam', 'Half Sangam', openPa, openRe, closePa, closeRe, 'Close');
-
-        // Full Sangam Winners
-        const fullSangamQuery = `
-          SELECT * FROM user_bid_history 
-          WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
-          AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
-          AND game_type = 'Full Sangam' 
-          AND open_pana = ? AND close_pana = ?
-        `;
-        await processWinners(db, game_name, date, fullSangamQuery, [game_name, date, date, `${date}%`, openPa, closePa], 'sangam', 'Full Sangam', openPa, openRe, closePa, closeRe, 'Close');
-      }
-    } else {
-      // sessionKey === 'close'
-      // Fetch open result from chart row if available
-      const [[chartRow]] = await db.query(
-        'SELECT * FROM result_chart WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?)',
-        [game_name, date, date, `${date}%`]
-      );
-      const prevOpenPa = chartRow ? chartRow.open_panna : 'N/A';
-      const prevOpenRe = chartRow ? chartRow.open_digit : 'N/A';
-
-      // Close Pana Winners (Single Pana, Double Pana, Triple Pana, SP Motor, DP Motor)
-      const closePanaQuery = `
-        SELECT * FROM user_bid_history 
-        WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
-        AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
-        AND LOWER(session) = 'close'
-        AND (
-          TRIM(close_pana) = TRIM(?) 
-          OR (TRIM(close_pana) = 'NA' AND TRIM(open_pana) = TRIM(?))
-        )
-        AND game_type != 'Half Sangam' AND game_type != 'Full Sangam'
-      `;
-      await processWinners(db, game_name, date, closePanaQuery, [game_name, date, date, `${date}%`, declaredPana, declaredPana], 'pana', 'Single Pana', prevOpenPa, prevOpenRe, declaredPana, declaredDigit, 'Close');
-
-      // Close Digit Winners
-      const closeDigitQuery = `
-        SELECT * FROM user_bid_history 
-        WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
-        AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
-        AND LOWER(session) = 'close'
-        AND (
-          close_digit = ? 
-          OR (close_digit = 'NA' AND open_digit = ?)
-        )
-        AND (game_type = 'Single Digit' OR game_type = 'Single Ank')
-      `;
-      await processWinners(db, game_name, date, closeDigitQuery, [game_name, date, date, `${date}%`, declaredDigit, declaredDigit], 'digit', 'Single Digit', prevOpenPa, prevOpenRe, declaredPana, declaredDigit, 'Close');
-
-      if (chartRow) {
-        const openRe = chartRow.open_digit;
-        const closeRe = declaredDigit;
-        const openPa = chartRow.open_panna;
-        const closePa = declaredPana;
-
-        // Jodi Winners
-        const jodiQuery = `
-          SELECT * FROM user_bid_history 
-          WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
-          AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
-          AND (game_type = 'Jodi Digit' OR game_type = 'Jodi' OR game_type LIKE '%Jodi%' OR game_type = 'Red Bracket') 
-          AND open_digit = ? AND close_digit = ?
-        `;
-        await processWinners(db, game_name, date, jodiQuery, [game_name, date, date, `${date}%`, openRe, closeRe], 'jodi', 'Jodi Digit', openPa, openRe, closePa, closeRe, 'Close');
-
-        // Half Sangam Winners
-        const halfSangamQuery = `
-          SELECT * FROM user_bid_history 
-          WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
-          AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
-          AND game_type = 'Half Sangam' 
-          AND ((open_digit = ? AND close_pana = ?) OR (open_pana = ? AND close_digit = ?))
-        `;
-        await processWinners(db, game_name, date, halfSangamQuery, [game_name, date, date, `${date}%`, openRe, closePa, openPa, closeRe], 'sangam', 'Half Sangam', openPa, openRe, closePa, closeRe, 'Close');
-
-        // Full Sangam Winners
-        const fullSangamQuery = `
-          SELECT * FROM user_bid_history 
-          WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
-          AND (date = ? OR DATE(date) = ? OR date LIKE ?) 
-          AND game_type = 'Full Sangam' 
-          AND open_pana = ? AND close_pana = ?
-        `;
-        await processWinners(db, game_name, date, fullSangamQuery, [game_name, date, date, `${date}%`, openPa, closePa], 'sangam', 'Full Sangam', openPa, openRe, closePa, closeRe, 'Close');
-      }
-    }
-
-    const successMsg = isUpdate
-      ? `Result updated successfully! Reverted ${revertedCount} previous winner payout(s) from user wallets and credited new winners.`
-      : 'Result Declared and Winners credited successfully!';
-
-    return res.json({ success: '1', msg: successMsg });
+    const result = await executeDeclareResultLogic(game_name, date, session, open_pana, open_result, close_pana, close_result);
+    return res.json(result);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ success: '0', error: err.message });
+    return res.json({ success: '0', msg: err.message || 'Declaration failed' });
   }
 };
 
@@ -1246,6 +1232,487 @@ exports.getDeclaredResults = async (req, res) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: '0', error: err.message });
+  }
+};
+
+// Fetch Auto Result data from External API (Supports both HTTP & HTTPS)
+const fetchFromExternalUrl = (urlStr) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const parsedUrl = new URL(urlStr);
+      const client = parsedUrl.protocol === 'http:' ? http : https;
+      const req = client.get(urlStr, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json, text/plain, */*'
+        },
+        timeout: 12000
+      }, (res) => {
+        let data = '';
+        res.on('data', chunk => { data += chunk; });
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            resolve(json);
+          } catch (e) {
+            reject(new Error('Failed to parse API response: ' + (data ? data.slice(0, 100) : 'empty response')));
+          }
+        });
+      });
+
+      req.on('error', (err) => reject(err));
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('External API request timed out (12s)'));
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+};
+
+// Helper to get configured Auto Result API URL from admin_settings
+const getAutoResultApiUrl = async () => {
+  try {
+    await db.query(`ALTER TABLE admin_settings ADD COLUMN auto_result_base_url VARCHAR(255) DEFAULT 'https://mumbai-mt-api.onrender.com'`).catch(() => {});
+    await db.query(`ALTER TABLE admin_settings ADD COLUMN auto_result_endpoint VARCHAR(100) DEFAULT '/today'`).catch(() => {});
+    const [rows] = await db.query('SELECT auto_result_base_url, auto_result_endpoint FROM admin_settings LIMIT 1');
+    let baseUrl = rows && rows[0]?.auto_result_base_url ? String(rows[0].auto_result_base_url).trim() : 'https://mumbai-mt-api.onrender.com';
+    let endpoint = rows && rows[0]?.auto_result_endpoint ? String(rows[0].auto_result_endpoint).trim() : '/today';
+
+    if (!baseUrl) {
+      baseUrl = 'https://mumbai-mt-api.onrender.com';
+    }
+    baseUrl = baseUrl.replace(/\/+$/, '');
+    if (endpoint && !endpoint.startsWith('/')) {
+      endpoint = '/' + endpoint;
+    }
+
+    if (endpoint && baseUrl.endsWith(endpoint)) {
+      return baseUrl;
+    }
+
+    return `${baseUrl}${endpoint}`;
+  } catch (err) {
+    console.error('getAutoResultApiUrl error:', err);
+    return 'https://mumbai-mt-api.onrender.com/today';
+  }
+};
+
+// Get Configured Auto Result Base URL and Endpoint
+exports.getAutoResultUrlConfig = async (req, res) => {
+  try {
+    await db.query(`ALTER TABLE admin_settings ADD COLUMN auto_result_base_url VARCHAR(255) DEFAULT 'https://mumbai-mt-api.onrender.com'`).catch(() => {});
+    await db.query(`ALTER TABLE admin_settings ADD COLUMN auto_result_endpoint VARCHAR(100) DEFAULT '/today'`).catch(() => {});
+    const [rows] = await db.query('SELECT auto_result_base_url, auto_result_endpoint FROM admin_settings LIMIT 1');
+    const baseUrl = rows && rows[0]?.auto_result_base_url ? String(rows[0].auto_result_base_url).trim() : 'https://mumbai-mt-api.onrender.com';
+    const endpoint = rows && rows[0]?.auto_result_endpoint ? String(rows[0].auto_result_endpoint).trim() : '/today';
+    const fullUrl = await getAutoResultApiUrl();
+    return res.json({
+      success: '1',
+      base_url: baseUrl,
+      endpoint: endpoint,
+      full_url: fullUrl
+    });
+  } catch (err) {
+    console.error('getAutoResultUrlConfig error:', err);
+    return res.status(500).json({ success: '0', error: err.message });
+  }
+};
+
+// Update Configured Auto Result Base URL and Endpoint
+exports.updateAutoResultUrlConfig = async (req, res) => {
+  try {
+    const { base_url, endpoint } = req.body;
+    if (!base_url || !String(base_url).trim()) {
+      return res.status(400).json({ success: '0', msg: 'Base URL is required!' });
+    }
+
+    let cleanBaseUrl = String(base_url).trim().replace(/\/+$/, '');
+    if (!cleanBaseUrl.startsWith('http://') && !cleanBaseUrl.startsWith('https://')) {
+      cleanBaseUrl = 'https://' + cleanBaseUrl;
+    }
+
+    let cleanEndpoint = endpoint !== undefined ? String(endpoint).trim() : '/today';
+    if (cleanEndpoint && !cleanEndpoint.startsWith('/')) {
+      cleanEndpoint = '/' + cleanEndpoint;
+    }
+
+    await db.query(`ALTER TABLE admin_settings ADD COLUMN auto_result_base_url VARCHAR(255) DEFAULT 'https://mumbai-mt-api.onrender.com'`).catch(() => {});
+    await db.query(`ALTER TABLE admin_settings ADD COLUMN auto_result_endpoint VARCHAR(100) DEFAULT '/today'`).catch(() => {});
+
+    await db.query(
+      'UPDATE admin_settings SET auto_result_base_url = ?, auto_result_endpoint = ?',
+      [cleanBaseUrl, cleanEndpoint]
+    );
+
+    const fullUrl = await getAutoResultApiUrl();
+    return res.json({
+      success: '1',
+      msg: 'Auto Result API Base URL updated successfully!',
+      base_url: cleanBaseUrl,
+      endpoint: cleanEndpoint,
+      full_url: fullUrl
+    });
+  } catch (err) {
+    console.error('updateAutoResultUrlConfig error:', err);
+    return res.status(500).json({ success: '0', error: err.message });
+  }
+};
+
+// Test Connection to Auto Result API
+exports.testAutoResultUrl = async (req, res) => {
+  try {
+    let testUrl = '';
+    if (req.body.base_url) {
+      let b = String(req.body.base_url).trim().replace(/\/+$/, '');
+      if (!b.startsWith('http://') && !b.startsWith('https://')) {
+        b = 'https://' + b;
+      }
+      let ep = req.body.endpoint !== undefined ? String(req.body.endpoint).trim() : '/today';
+      if (ep && !ep.startsWith('/')) ep = '/' + ep;
+      testUrl = b.endsWith(ep) ? b : `${b}${ep}`;
+    } else {
+      testUrl = await getAutoResultApiUrl();
+    }
+
+    const startTime = Date.now();
+    const result = await fetchFromExternalUrl(testUrl);
+    const durationMs = Date.now() - startTime;
+
+    const dataArray = Array.isArray(result) ? result : (result.data || []);
+    return res.json({
+      success: '1',
+      msg: `Connection successful! Fetched ${dataArray.length} market(s) in ${durationMs}ms.`,
+      url_tested: testUrl,
+      duration_ms: durationMs,
+      total_markets: dataArray.length,
+      sample_markets: dataArray.slice(0, 3)
+    });
+  } catch (err) {
+    return res.status(502).json({
+      success: '0',
+      msg: 'Connection failed: ' + err.message
+    });
+  }
+};
+
+exports.getAutoResultToday = async (req, res) => {
+  try {
+    const apiUrl = await getAutoResultApiUrl();
+    const json = await fetchFromExternalUrl(apiUrl);
+    return res.json(json);
+  } catch (err) {
+    console.error('getAutoResultToday error:', err.message);
+    return res.status(502).json({
+      success: '0',
+      msg: 'Failed to fetch from Auto Result API: ' + err.message
+    });
+  }
+};
+
+// Get Auto Declare Switch Status
+exports.getAutoDeclareStatus = async (req, res) => {
+  try {
+    await db.query(`ALTER TABLE admin_settings ADD COLUMN auto_declare_status VARCHAR(10) DEFAULT '0'`).catch(() => {});
+    const [rows] = await db.query('SELECT auto_declare_status FROM admin_settings LIMIT 1');
+    const status = rows && rows.length > 0 ? (rows[0].auto_declare_status || '0') : '0';
+    return res.json({ success: '1', auto_declare_status: status });
+  } catch (err) {
+    console.error('getAutoDeclareStatus error:', err);
+    return res.json({ success: '1', auto_declare_status: '0' });
+  }
+};
+
+// Toggle Auto Declare Switch Status (Active / Deactive)
+exports.toggleAutoDeclareStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const safeStatus = (status === '1' || status === 1 || status === true) ? '1' : '0';
+    await db.query(`ALTER TABLE admin_settings ADD COLUMN auto_declare_status VARCHAR(10) DEFAULT '0'`).catch(() => {});
+    await db.query('UPDATE admin_settings SET auto_declare_status = ?', [safeStatus]);
+    return res.json({
+      success: '1',
+      auto_declare_status: safeStatus,
+      msg: `Auto declaration is now ${safeStatus === '1' ? 'ACTIVE' : 'DEACTIVE'}`
+    });
+  } catch (err) {
+    console.error('toggleAutoDeclareStatus error:', err);
+    return res.status(500).json({ success: '0', error: err.message });
+  }
+};
+
+// Automatically Declare Pending Results from Mumbai MT API
+exports.autoDeclareResults = async (req, res) => {
+  try {
+    let marketsData = req.body.markets;
+    if (!marketsData || !Array.isArray(marketsData) || marketsData.length === 0) {
+      const apiUrl = await getAutoResultApiUrl();
+      const apiRes = await fetchFromExternalUrl(apiUrl).catch(() => null);
+      if (apiRes && Array.isArray(apiRes.data)) {
+        marketsData = apiRes.data;
+      }
+    }
+
+    if (!marketsData || !Array.isArray(marketsData)) {
+      return res.json({ success: '0', msg: 'No markets data available for auto declare', declaredCount: 0 });
+    }
+
+    const todayDateStr = getISTDateStr();
+    const declaredEvents = [];
+
+    // Get all distinct games in game_time
+    const [dbGames] = await db.query(
+      `SELECT g1.* FROM game_time g1
+       INNER JOIN (
+         SELECT game, MIN(id) as min_id FROM game_time GROUP BY game
+       ) g2 ON g1.id = g2.min_id`
+    ).catch(() => [[]]);
+
+    for (const m of marketsData) {
+      const apiMarketName = String(m.market_name || m.game_name || '').trim();
+      if (!apiMarketName) continue;
+
+      const matchedGame = dbGames.find(g => {
+        const gn = String(g.game || '').trim().toLowerCase();
+        const mn = apiMarketName.toLowerCase();
+        return gn === mn || mn.includes(gn) || gn.includes(mn);
+      });
+      const canonicalGameName = matchedGame ? matchedGame.game : apiMarketName;
+
+      // Check current chart row for today
+      const [chartRows] = await db.query(
+        'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?) AND TRIM(LOWER(game_name)) = TRIM(LOWER(?))',
+        [todayDateStr, todayDateStr, `${todayDateStr}%`, canonicalGameName]
+      );
+      const chartRow = chartRows.length > 0 ? chartRows[0] : null;
+
+      // 1. Check Open declaration
+      const openPana = String(m.open_pana || '').trim();
+      const openDigit = String(m.open_digit || '').trim();
+      const hasValidOpen = /^\d{3}$/.test(openPana) && openPana !== '***';
+
+      if (hasValidOpen) {
+        const computedOpenDigit = /^\d$/.test(openDigit) && openDigit !== '*'
+          ? openDigit
+          : ((parseInt(openPana[0], 10) + parseInt(openPana[1], 10) + parseInt(openPana[2], 10)) % 10).toString();
+
+        const isOpenAlreadyDeclared = Boolean(chartRow && chartRow.open_panna && chartRow.open_digit);
+
+        if (!isOpenAlreadyDeclared) {
+          try {
+            await executeDeclareResultLogic(canonicalGameName, todayDateStr, 'open', openPana, computedOpenDigit, '', '');
+            declaredEvents.push({
+              game_name: canonicalGameName,
+              session: 'open',
+              pana: openPana,
+              digit: computedOpenDigit
+            });
+          } catch (e) {
+            console.error(`Error auto-declaring open for ${canonicalGameName}:`, e.message);
+          }
+        }
+      }
+
+      // Re-fetch chart row after potential open declaration
+      const [refreshedChart] = await db.query(
+        'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?) AND TRIM(LOWER(game_name)) = TRIM(LOWER(?))',
+        [todayDateStr, todayDateStr, `${todayDateStr}%`, canonicalGameName]
+      );
+      const updatedChartRow = refreshedChart.length > 0 ? refreshedChart[0] : null;
+
+      // 2. Check Close declaration
+      const closePana = String(m.close_pana || '').trim();
+      const closeDigit = String(m.close_digit || '').trim();
+      const hasValidClose = /^\d{3}$/.test(closePana) && closePana !== '***';
+
+      if (hasValidClose && updatedChartRow && updatedChartRow.open_panna && updatedChartRow.open_digit) {
+        const computedCloseDigit = /^\d$/.test(closeDigit) && closeDigit !== '*'
+          ? closeDigit
+          : ((parseInt(closePana[0], 10) + parseInt(closePana[1], 10) + parseInt(closePana[2], 10)) % 10).toString();
+
+        const isCloseAlreadyDeclared = Boolean(updatedChartRow.close_panna && updatedChartRow.close_digit);
+
+        if (!isCloseAlreadyDeclared) {
+          try {
+            await executeDeclareResultLogic(canonicalGameName, todayDateStr, 'close', '', '', closePana, computedCloseDigit);
+            declaredEvents.push({
+              game_name: canonicalGameName,
+              session: 'close',
+              pana: closePana,
+              digit: computedCloseDigit
+            });
+          } catch (e) {
+            console.error(`Error auto-declaring close for ${canonicalGameName}:`, e.message);
+          }
+        }
+      }
+    }
+
+    return res.json({
+      success: '1',
+      declaredCount: declaredEvents.length,
+      declaredEvents,
+      msg: declaredEvents.length > 0
+        ? `Auto-declared ${declaredEvents.length} result(s) successfully!`
+        : 'No pending undeclared results found in API'
+    });
+  } catch (err) {
+    console.error('autoDeclareResults error:', err);
+    return res.status(500).json({ success: '0', error: err.message });
+  }
+};
+
+// Calculate Winner Counts for all markets in Auto Result table
+exports.getAutoWinnerCounts = async (req, res) => {
+  try {
+    const { date, markets } = req.body;
+    const targetDate = date || getISTDateStr();
+    if (!markets || !Array.isArray(markets)) {
+      return res.json({ success: '1', counts: {} });
+    }
+
+    const counts = {};
+
+    for (const m of markets) {
+      const marketName = String(m.market_name || m.game_name || '').trim();
+      if (!marketName) continue;
+
+      let openCount = 0;
+      let closeCount = 0;
+
+      // 1. Check if already declared in result_chart
+      const [chartRows] = await db.query(
+        'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?) AND TRIM(LOWER(game_name)) = TRIM(LOWER(?))',
+        [targetDate, targetDate, `${targetDate}%`, marketName]
+      );
+      const chartRow = chartRows.length > 0 ? chartRows[0] : null;
+
+      // OPEN COUNT
+      if (chartRow && chartRow.open_panna && chartRow.open_digit) {
+        const [rep] = await db.query(
+          'SELECT COUNT(*) as cnt FROM user_winning_report WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR date LIKE ?) AND LOWER(session) = "open"',
+          [marketName, targetDate, `${targetDate}%`]
+        );
+        openCount = rep[0]?.cnt || 0;
+      } else {
+        const openPana = String(m.open_pana || '').trim();
+        const openDigit = String(m.open_digit || '').trim();
+        if (/^\d{3}$/.test(openPana) && openPana !== '***') {
+          const digitVal = /^\d$/.test(openDigit) && openDigit !== '*' 
+            ? openDigit 
+            : ((parseInt(openPana[0], 10) + parseInt(openPana[1], 10) + parseInt(openPana[2], 10)) % 10).toString();
+
+          const [panaBids] = await db.query(
+            `SELECT COUNT(*) as cnt FROM user_bid_history 
+             WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+             AND (date = ? OR date LIKE ?) 
+             AND LOWER(session) = 'open'
+             AND (TRIM(open_pana) = TRIM(?) OR (TRIM(open_pana) = 'NA' AND TRIM(close_pana) = TRIM(?)))
+             AND game_type != 'Half Sangam' AND game_type != 'Full Sangam'`,
+            [marketName, targetDate, `${targetDate}%`, openPana, openPana]
+          );
+          const [digitBids] = await db.query(
+            `SELECT COUNT(*) as cnt FROM user_bid_history 
+             WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+             AND (date = ? OR date LIKE ?) 
+             AND LOWER(session) = 'open'
+             AND (open_digit = ? OR (open_digit = 'NA' AND close_digit = ?))
+             AND (game_type = 'Single Digit' OR game_type = 'Single Ank')`,
+            [marketName, targetDate, `${targetDate}%`, digitVal, digitVal]
+          );
+          openCount = (panaBids[0]?.cnt || 0) + (digitBids[0]?.cnt || 0);
+        }
+      }
+
+      // CLOSE COUNT
+      if (chartRow && chartRow.close_panna && chartRow.close_digit) {
+        const [rep] = await db.query(
+          'SELECT COUNT(*) as cnt FROM user_winning_report WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR date LIKE ?) AND (LOWER(session) = "close" OR LOWER(session) = "sangam")',
+          [marketName, targetDate, `${targetDate}%`]
+        );
+        closeCount = rep[0]?.cnt || 0;
+      } else {
+        const closePana = String(m.close_pana || '').trim();
+        const closeDigit = String(m.close_digit || '').trim();
+        if (/^\d{3}$/.test(closePana) && closePana !== '***') {
+          const digitVal = /^\d$/.test(closeDigit) && closeDigit !== '*' 
+            ? closeDigit 
+            : ((parseInt(closePana[0], 10) + parseInt(closePana[1], 10) + parseInt(closePana[2], 10)) % 10).toString();
+
+          const [panaBids] = await db.query(
+            `SELECT COUNT(*) as cnt FROM user_bid_history 
+             WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+             AND (date = ? OR date LIKE ?) 
+             AND LOWER(session) = 'close'
+             AND (TRIM(close_pana) = TRIM(?) OR (TRIM(close_pana) = 'NA' AND TRIM(open_pana) = TRIM(?)))
+             AND game_type != 'Half Sangam' AND game_type != 'Full Sangam'`,
+            [marketName, targetDate, `${targetDate}%`, closePana, closePana]
+          );
+          const [digitBids] = await db.query(
+            `SELECT COUNT(*) as cnt FROM user_bid_history 
+             WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+             AND (date = ? OR date LIKE ?) 
+             AND LOWER(session) = 'close'
+             AND (close_digit = ? OR (close_digit = 'NA' AND open_digit = ?))
+             AND (game_type = 'Single Digit' OR game_type = 'Single Ank')`,
+            [marketName, targetDate, `${targetDate}%`, digitVal, digitVal]
+          );
+
+          const openRe = chartRow?.open_digit || (m.open_digit !== '*' ? m.open_digit : null);
+          const openPa = chartRow?.open_panna || (m.open_pana !== '***' ? m.open_pana : null);
+          let jodiCount = 0;
+          let halfSangamCount = 0;
+          let fullSangamCount = 0;
+
+          if (openRe) {
+            const [jBids] = await db.query(
+              `SELECT COUNT(*) as cnt FROM user_bid_history 
+               WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+               AND (date = ? OR date LIKE ?) 
+               AND (game_type = 'Jodi Digit' OR game_type = 'Jodi' OR game_type LIKE '%Jodi%' OR game_type = 'Red Bracket') 
+               AND open_digit = ? AND close_digit = ?`,
+              [marketName, targetDate, `${targetDate}%`, openRe, digitVal]
+            );
+            jodiCount = jBids[0]?.cnt || 0;
+          }
+
+          if (openRe && openPa) {
+            const [hsBids] = await db.query(
+              `SELECT COUNT(*) as cnt FROM user_bid_history 
+               WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+               AND (date = ? OR date LIKE ?) 
+               AND game_type = 'Half Sangam' 
+               AND ((open_digit = ? AND close_pana = ?) OR (open_pana = ? AND close_digit = ?))`,
+              [marketName, targetDate, `${targetDate}%`, openRe, closePana, openPa, digitVal]
+            );
+            halfSangamCount = hsBids[0]?.cnt || 0;
+
+            const [fsBids] = await db.query(
+              `SELECT COUNT(*) as cnt FROM user_bid_history 
+               WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+               AND (date = ? OR date LIKE ?) 
+               AND game_type = 'Full Sangam' 
+               AND open_pana = ? AND close_pana = ?`,
+              [marketName, targetDate, `${targetDate}%`, openPa, closePana]
+            );
+            fullSangamCount = fsBids[0]?.cnt || 0;
+          }
+
+          closeCount = (panaBids[0]?.cnt || 0) + (digitBids[0]?.cnt || 0) + jodiCount + halfSangamCount + fullSangamCount;
+        }
+      }
+
+      counts[marketName] = {
+        open: openCount,
+        close: closeCount
+      };
+    }
+
+    return res.json({ success: '1', counts });
+  } catch (err) {
+    console.error('getAutoWinnerCounts error:', err);
+    return res.status(500).json({ success: '0', error: err.message, counts: {} });
   }
 };
 

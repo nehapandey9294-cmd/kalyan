@@ -268,6 +268,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
   // Submenu collapse states
   const [openMenus, setOpenMenus] = useState({
     commission: true,
+    declare_result: false,
     reports: false,
     wallet: false,
     games: false,
@@ -277,7 +278,9 @@ const AdminDashboard = ({ setAdminAuth }) => {
 
   // Automatically open relevant sidebar menu based on activeTab
   useEffect(() => {
-    if (['user_commission', 'user_commission_pay_list'].includes(activeTab)) {
+    if (['declare_result', 'declare_result_manual', 'declare_result_auto'].includes(activeTab)) {
+      setOpenMenus(prev => ({ ...prev, declare_result: true }));
+    } else if (['user_commission', 'user_commission_pay_list'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, commission: true }));
     } else if (['bid_history_report', 'customer_sell_report', 'winning_report', 'transfer_report', 'withdraw_report', 'add_fund_report', 'report_bid_history', 'report_sell', 'report_winning', 'report_transfer', 'report_bid_win', 'report_withdraw', 'report_auto_deposit', 'report_add_fund', 'winning_prediction'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, reports: true }));
@@ -287,7 +290,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
       setOpenMenus(prev => ({ ...prev, games: true }));
     } else if (activeTab.startsWith('num_')) {
       setOpenMenus(prev => ({ ...prev, numbers: true }));
-    } else if (['settings', 'contact_settings', 'sliders', 'how_to_play'].includes(activeTab)) {
+    } else if (['settings', 'contact_settings', 'sliders', 'how_to_play', 'auto_active', 'base_url', 'payment_gateway'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, settings: true }));
     }
   }, [activeTab]);
@@ -476,6 +479,47 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const [showWinnerPreviewModal, setShowWinnerPreviewModal] = useState(false);
   const [previewWinnersData, setPreviewWinnersData] = useState({ totalWinners: 0, totalPayout: 0, winners: [] });
   const [previewLoading, setPreviewLoading] = useState(false);
+
+  // Auto Result States (Mumbai MT API Sync)
+  const [autoResults, setAutoResults] = useState([]);
+  const [autoMeta, setAutoMeta] = useState({ total_markets: 0, declared_count: 0, current_date_ist: '', current_time_ist: '' });
+  const [autoLoading, setAutoLoading] = useState(false);
+  const [autoError, setAutoError] = useState('');
+  const [autoSearchTerm, setAutoSearchTerm] = useState('');
+  const [autoSelectedDate, setAutoSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [autoAutoRefresh, setAutoAutoRefresh] = useState(false);
+  const [isAutoDeclareActive, setIsAutoDeclareActive] = useState(() => localStorage.getItem('admin_auto_declare_active') === '1');
+  const [autoDeclareToggleLoading, setAutoDeclareToggleLoading] = useState(false);
+  const [autoWinnerCounts, setAutoWinnerCounts] = useState({});
+  const [autoWinnerCountsLoading, setAutoWinnerCountsLoading] = useState(false);
+
+  // Auto Result Base URL Settings States
+  const [autoResultBaseUrl, setAutoResultBaseUrl] = useState(() => localStorage.getItem('admin_auto_result_base_url') || 'https://mumbai-mt-api.onrender.com');
+  const [autoResultEndpoint, setAutoResultEndpoint] = useState(() => localStorage.getItem('admin_auto_result_endpoint') || '/today');
+  const [autoResultFullUrl, setAutoResultFullUrl] = useState(() => localStorage.getItem('admin_auto_result_full_url') || 'https://mumbai-mt-api.onrender.com/today');
+  const [autoResultUrlLoading, setAutoResultUrlLoading] = useState(false);
+  const [autoResultUrlSaving, setAutoResultUrlSaving] = useState(false);
+  const [autoResultUrlTesting, setAutoResultUrlTesting] = useState(false);
+  const [autoResultUrlMsg, setAutoResultUrlMsg] = useState('');
+  const [autoResultUrlError, setAutoResultUrlError] = useState('');
+  const [autoResultTestResult, setAutoResultTestResult] = useState(null);
+
+  // Auto Winner Dialog Modal States
+  const [showAutoWinnerModal, setShowAutoWinnerModal] = useState(false);
+  const [autoModalData, setAutoModalData] = useState({
+    market_name: '',
+    session: 'open',
+    date: new Date().toISOString().slice(0, 10),
+    pana: '',
+    digit: '',
+    isDeclaredInSystem: false
+  });
+  const [autoShowPanaDropdown, setAutoShowPanaDropdown] = useState(false);
+  const [autoWinnerPreview, setAutoWinnerPreview] = useState({ totalWinners: 0, totalPayout: 0, winners: [] });
+  const [autoPreviewLoading, setAutoPreviewLoading] = useState(false);
+  const [autoDeclareLoading, setAutoDeclareLoading] = useState(false);
+  const [autoDeclareError, setAutoDeclareError] = useState('');
+  const [autoDeclareSuccess, setAutoDeclareSuccess] = useState('');
 
   // Searchable Pana Dropdown & Auto Digit Calculation Helpers
   const [showOpenPanaDropdown, setShowOpenPanaDropdown] = useState(false);
@@ -1507,6 +1551,9 @@ const AdminDashboard = ({ setAdminAuth }) => {
         if (showWinnerPreviewModal) {
           handlePreviewWinners();
         }
+        if (showAutoWinnerModal) {
+          fetchAutoPreviewWinners();
+        }
       } else {
         alert(res.data.msg || 'Failed to update bid');
       }
@@ -1895,8 +1942,14 @@ const AdminDashboard = ({ setAdminAuth }) => {
         setBidRevertGame(games[0].games_name);
       }
       fetchBidRevertList();
-    } else if (activeTab === 'declare_result') {
+    } else if (activeTab === 'declare_result' || activeTab === 'declare_result_manual') {
       fetchDeclaredResults(declareDate);
+    } else if (activeTab === 'declare_result_auto') {
+      fetchAutoDeclareStatus();
+      fetchAutoResultUrlConfig();
+      fetchAutoResults();
+    } else if (activeTab === 'base_url') {
+      fetchAutoResultUrlConfig();
     } else if (activeTab === 'report_bid_history') {
       fetchReportBidHistory();
     } else if (activeTab === 'report_sell') {
@@ -2159,6 +2212,463 @@ const AdminDashboard = ({ setAdminAuth }) => {
       alert('Error deleting bid');
     }
   };
+
+  // Auto Result: Fetch data from Mumbai MT API (proxy or direct)
+  const fetchAutoResults = async (targetDate = autoSelectedDate) => {
+    setAutoLoading(true);
+    setAutoError('');
+    try {
+      let data = null;
+      try {
+        const res = await api.get('/admin/auto-result/today', getHeaders());
+        if (res.data && (res.data.success === '1' || Array.isArray(res.data.data))) {
+          data = res.data;
+        }
+      } catch (errProxy) {
+        console.warn('Backend proxy auto-result fetch failed, falling back to direct API...', errProxy);
+      }
+
+      if (!data) {
+        const fallbackTarget = autoResultFullUrl || (autoResultBaseUrl ? `${autoResultBaseUrl.replace(/\/+$/, '')}${autoResultEndpoint || '/today'}` : 'https://mumbai-mt-api.onrender.com/today');
+        const extRes = await fetch(fallbackTarget);
+        if (!extRes.ok) throw new Error(`HTTP ${extRes.status}`);
+        data = await extRes.json();
+      }
+
+      if (data && Array.isArray(data.data)) {
+        setAutoResults(data.data);
+        setAutoMeta({
+          total_markets: data.total_markets || data.data.length,
+          declared_count: data.declared_count || 0,
+          current_date_ist: data.current_date_ist || '',
+          current_time_ist: data.current_time_ist || ''
+        });
+        // Fetch winner counts for open and close sessions across all markets
+        fetchAutoWinnerCounts(data.data, targetDate);
+        // If Auto Declare switch is active, automatically finalize pending undeclared results
+        if (isAutoDeclareActive) {
+          triggerAutoDeclare(data.data);
+        }
+      } else {
+        setAutoError('Invalid API data format received');
+      }
+
+      // Also ensure declared results from our database are fresh
+      fetchDeclaredResults(targetDate);
+    } catch (err) {
+      console.error('Error fetching auto results:', err);
+      setAutoError(err.message || 'Failed to fetch auto results from API');
+    } finally {
+      setAutoLoading(false);
+    }
+  };
+
+  // Fetch Auto Declare Status from Backend
+  const fetchAutoDeclareStatus = async () => {
+    try {
+      const res = await api.get('/admin/auto-result/status', getHeaders());
+      if (res.data && res.data.success === '1') {
+        const isActive = res.data.auto_declare_status === '1';
+        setIsAutoDeclareActive(isActive);
+        localStorage.setItem('admin_auto_declare_active', isActive ? '1' : '0');
+      }
+    } catch (err) {
+      console.error('Error fetching auto declare status:', err);
+    }
+  };
+
+  // Toggle Auto Declare Status (Active / Deactive)
+  const handleToggleAutoDeclare = async () => {
+    const newStatus = !isAutoDeclareActive;
+    const confirmMsg = newStatus
+      ? 'Are you sure you want to ACTIVATE Auto Result Declaration?\n\nWhen Active, results fetched from Mumbai MT API will be automatically declared and payouts will be credited to user wallets!'
+      : 'Are you sure you want to DEACTIVATE Auto Result Declaration?\n\nAutomatic result declaration will be paused.';
+    if (!window.confirm(confirmMsg)) return;
+
+    setAutoDeclareToggleLoading(true);
+    try {
+      const res = await api.post('/admin/auto-result/toggle-auto', { status: newStatus ? '1' : '0' }, getHeaders());
+      if (res.data && res.data.success === '1') {
+        setIsAutoDeclareActive(newStatus);
+        localStorage.setItem('admin_auto_declare_active', newStatus ? '1' : '0');
+        if (newStatus) {
+          await triggerAutoDeclare();
+        }
+      } else {
+        alert(res.data?.msg || 'Failed to update auto declare status');
+      }
+    } catch (err) {
+      console.error('Error toggling auto declare:', err);
+      alert('Error toggling auto declare status');
+    } finally {
+      setAutoDeclareToggleLoading(false);
+    }
+  };
+
+  // Trigger Auto Declare for pending undeclared results
+  const triggerAutoDeclare = async (markets) => {
+    try {
+      const payload = markets && Array.isArray(markets) && markets.length > 0 ? { markets } : {};
+      const res = await api.post('/admin/auto-result/auto-declare', payload, getHeaders());
+      if (res.data && res.data.success === '1') {
+        if (res.data.declaredCount > 0) {
+          fetchDeclaredResults(autoSelectedDate);
+          fetchAdminCoins();
+          fetchAutoResults(autoSelectedDate);
+        }
+        return res.data;
+      }
+    } catch (err) {
+      console.error('Error executing auto-declare:', err);
+    }
+    return null;
+  };
+
+  // Fetch Winner Counts for all markets in Auto Result table
+  const fetchAutoWinnerCounts = async (markets, targetDate = autoSelectedDate) => {
+    if (!markets || !Array.isArray(markets) || markets.length === 0) return;
+    setAutoWinnerCountsLoading(true);
+    try {
+      const res = await api.post('/admin/auto-result/winner-counts', {
+        date: targetDate,
+        markets
+      }, getHeaders());
+      if (res.data && res.data.success === '1' && res.data.counts) {
+        setAutoWinnerCounts(res.data.counts);
+      }
+    } catch (err) {
+      console.error('Error fetching winner counts:', err);
+    } finally {
+      setAutoWinnerCountsLoading(false);
+    }
+  };
+
+  // Fetch Configured Auto Result Base URL from Backend
+  const fetchAutoResultUrlConfig = async () => {
+    setAutoResultUrlLoading(true);
+    setAutoResultUrlError('');
+    try {
+      const res = await api.get('/admin/auto-result/url', getHeaders());
+      if (res.data && res.data.success === '1') {
+        const bUrl = res.data.base_url || 'https://mumbai-mt-api.onrender.com';
+        const ep = res.data.endpoint || '/today';
+        const fUrl = res.data.full_url || `${bUrl.replace(/\/+$/, '')}${ep}`;
+        setAutoResultBaseUrl(bUrl);
+        setAutoResultEndpoint(ep);
+        setAutoResultFullUrl(fUrl);
+        localStorage.setItem('admin_auto_result_base_url', bUrl);
+        localStorage.setItem('admin_auto_result_endpoint', ep);
+        localStorage.setItem('admin_auto_result_full_url', fUrl);
+      }
+    } catch (err) {
+      console.error('Error fetching auto result url config:', err);
+    } finally {
+      setAutoResultUrlLoading(false);
+    }
+  };
+
+  // Save Configured Auto Result Base URL & Endpoint
+  const handleSaveAutoResultUrlConfig = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setAutoResultUrlMsg('');
+    setAutoResultUrlError('');
+
+    if (!autoResultBaseUrl || !autoResultBaseUrl.trim()) {
+      setAutoResultUrlError('Base URL cannot be empty');
+      return;
+    }
+
+    setAutoResultUrlSaving(true);
+    try {
+      const res = await api.post('/admin/auto-result/url', {
+        base_url: autoResultBaseUrl.trim(),
+        endpoint: autoResultEndpoint ? autoResultEndpoint.trim() : '/today'
+      }, getHeaders());
+
+      if (res.data && res.data.success === '1') {
+        setAutoResultUrlMsg(res.data.msg || 'Auto Result API Base URL saved successfully!');
+        const fUrl = res.data.full_url;
+        setAutoResultFullUrl(fUrl);
+        localStorage.setItem('admin_auto_result_base_url', res.data.base_url);
+        localStorage.setItem('admin_auto_result_endpoint', res.data.endpoint);
+        localStorage.setItem('admin_auto_result_full_url', fUrl);
+        // Refresh auto results if currently active
+        fetchAutoResults();
+      } else {
+        setAutoResultUrlError(res.data?.msg || 'Failed to save Base URL');
+      }
+    } catch (err) {
+      console.error('Error saving auto result url:', err);
+      setAutoResultUrlError(err.response?.data?.msg || err.message || 'Error saving Base URL');
+    } finally {
+      setAutoResultUrlSaving(false);
+    }
+  };
+
+  // Test Connection to Configured Auto Result API
+  const handleTestAutoResultUrl = async () => {
+    setAutoResultUrlMsg('');
+    setAutoResultUrlError('');
+    setAutoResultTestResult(null);
+    setAutoResultUrlTesting(true);
+
+    try {
+      const res = await api.post('/admin/auto-result/test-url', {
+        base_url: autoResultBaseUrl.trim(),
+        endpoint: autoResultEndpoint ? autoResultEndpoint.trim() : '/today'
+      }, getHeaders());
+
+      if (res.data && res.data.success === '1') {
+        setAutoResultTestResult(res.data);
+        setAutoResultUrlMsg(`✓ Connection successful! Received ${res.data.total_markets} market(s) in ${res.data.duration_ms}ms.`);
+      } else {
+        setAutoResultUrlError(res.data?.msg || 'Connection test failed');
+      }
+    } catch (err) {
+      console.error('Error testing auto result url:', err);
+      setAutoResultUrlError(err.response?.data?.msg || err.message || 'Connection test failed');
+    } finally {
+      setAutoResultUrlTesting(false);
+    }
+  };
+
+  // Reset to Default Mumbai MT API URL
+  const handleResetAutoResultUrl = () => {
+    setAutoResultBaseUrl('https://mumbai-mt-api.onrender.com');
+    setAutoResultEndpoint('/today');
+    setAutoResultUrlMsg('');
+    setAutoResultUrlError('');
+    setAutoResultTestResult(null);
+  };
+
+  // Helper: Find matching declared result in local database (result_chart)
+  const findDeclaredMarket = (marketName, targetDate = autoSelectedDate) => {
+    if (!marketName) return null;
+    const clean = String(marketName).trim().toLowerCase();
+    return declaredResultsList.find(r => {
+      const rName = String(r.game_name || '').trim().toLowerCase();
+      const matchesName = rName === clean || clean.includes(rName) || rName.includes(clean);
+      const matchesDate = !targetDate || r.date === targetDate || String(r.date).startsWith(targetDate);
+      return matchesName && matchesDate;
+    });
+  };
+
+  // Open Winner Dialog for Auto Result (Open or Close session)
+  const handleOpenAutoWinnerModal = (market, session = 'open') => {
+    setAutoDeclareError('');
+    setAutoDeclareSuccess('');
+    const targetGame = market.market_name || market.game_name || '';
+    const dateVal = autoSelectedDate || market.date || new Date().toISOString().slice(0, 10);
+    const declaredRow = findDeclaredMarket(targetGame, dateVal);
+
+    if (session === 'close') {
+      const hasOpen = Boolean(declaredRow && declaredRow.open_panna && declaredRow.open_digit);
+      if (!hasOpen) {
+        alert(`Cannot declare Close Result for "${targetGame}" because Open Result has not been declared yet.\n\nPlease declare Open Result first.`);
+        return;
+      }
+    }
+
+    let initialPana = '';
+    let initialDigit = '';
+
+    if (session === 'open') {
+      if (market.open_pana && market.open_pana !== '***' && /^\d{3}$/.test(market.open_pana)) {
+        initialPana = market.open_pana;
+      } else if (declaredRow?.open_panna) {
+        initialPana = declaredRow.open_panna;
+      }
+      if (market.open_digit && market.open_digit !== '*' && /^\d$/.test(market.open_digit)) {
+        initialDigit = market.open_digit;
+      } else if (initialPana.length === 3) {
+        initialDigit = getPanaSingleDigit(initialPana);
+      } else if (declaredRow?.open_digit) {
+        initialDigit = declaredRow.open_digit;
+      }
+    } else {
+      if (market.close_pana && market.close_pana !== '***' && /^\d{3}$/.test(market.close_pana)) {
+        initialPana = market.close_pana;
+      } else if (declaredRow?.close_panna) {
+        initialPana = declaredRow.close_panna;
+      }
+      if (market.close_digit && market.close_digit !== '*' && /^\d$/.test(market.close_digit)) {
+        initialDigit = market.close_digit;
+      } else if (initialPana.length === 3) {
+        initialDigit = getPanaSingleDigit(initialPana);
+      } else if (declaredRow?.close_digit) {
+        initialDigit = declaredRow.close_digit;
+      }
+    }
+
+    const isDeclaredInSystem = session === 'open'
+      ? Boolean(declaredRow && declaredRow.open_panna && declaredRow.open_digit)
+      : Boolean(declaredRow && declaredRow.close_panna && declaredRow.close_digit);
+
+    const modalState = {
+      market_name: targetGame,
+      session,
+      date: dateVal,
+      pana: initialPana,
+      digit: initialDigit,
+      isDeclaredInSystem
+    };
+
+    setAutoModalData(modalState);
+    setShowAutoWinnerModal(true);
+
+    if (initialPana && /^\d{3}$/.test(initialPana) && initialDigit && /^\d$/.test(initialDigit)) {
+      fetchAutoPreviewWinners(targetGame, dateVal, session, initialPana, initialDigit);
+    } else {
+      setAutoWinnerPreview({ totalWinners: 0, totalPayout: 0, winners: [] });
+    }
+  };
+
+  // Preview Winners inside Auto Winner Dialog
+  const fetchAutoPreviewWinners = async (gameName, dateVal, sess, pVal, dVal) => {
+    const targetGame = gameName || autoModalData.market_name;
+    const targetDate = dateVal || autoModalData.date;
+    const targetSession = sess || autoModalData.session;
+    const targetPana = pVal !== undefined ? pVal : autoModalData.pana;
+    const targetDigit = dVal !== undefined ? dVal : autoModalData.digit;
+
+    if (!targetGame || !/^\d{3}$/.test(targetPana) || !/^\d$/.test(targetDigit)) {
+      return;
+    }
+
+    setAutoPreviewLoading(true);
+    try {
+      const payload = {
+        game_name: targetGame,
+        date: targetDate,
+        session: targetSession
+      };
+      if (targetSession === 'open') {
+        payload.open_pana = targetPana;
+        payload.open_result = targetDigit;
+      } else {
+        payload.close_pana = targetPana;
+        payload.close_result = targetDigit;
+      }
+
+      const res = await api.post('/admin/declare-result/preview', payload, getHeaders());
+      if (res.data.success === '1') {
+        setAutoWinnerPreview({
+          totalWinners: res.data.totalWinners || 0,
+          totalPayout: res.data.totalPayout || 0,
+          winners: res.data.winners || []
+        });
+      } else {
+        console.warn('Auto preview failed:', res.data.msg);
+      }
+    } catch (err) {
+      console.error('Error in fetchAutoPreviewWinners:', err);
+    } finally {
+      setAutoPreviewLoading(false);
+    }
+  };
+
+  // Delete bid in Auto Winner Dialog preview
+  const handleDeleteBidInAutoPreview = async (bidId) => {
+    if (!window.confirm('Are you sure you want to delete this bid?')) return;
+    try {
+      const res = await api.post('/admin/reports/bid-history/delete', { id: bidId }, getHeaders());
+      if (res.data.success === '1') {
+        alert('Bid deleted successfully');
+        fetchAutoPreviewWinners();
+      } else {
+        alert(res.data.msg || 'Failed to delete bid');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error deleting bid');
+    }
+  };
+
+  // Final Declare Result from Auto Winner Dialog
+  const handleAutoFinalDeclare = async () => {
+    setAutoDeclareError('');
+    setAutoDeclareSuccess('');
+
+    const { market_name, session, date, pana, digit, isDeclaredInSystem } = autoModalData;
+    if (!market_name) {
+      setAutoDeclareError('Invalid market name');
+      return;
+    }
+    if (!/^\d{3}$/.test(pana) || !/^\d$/.test(digit)) {
+      setAutoDeclareError('Valid 3-digit Pana and 1-digit single result are required');
+      return;
+    }
+
+    if (isDeclaredInSystem) {
+      const confirmUpdate = window.confirm(
+        `Result for "${market_name}" (${session.toUpperCase()}) on ${date} is ALREADY declared!\n\nUpdating it will DEDUCT / REVERT previous winning amounts from user wallets and credit the new winners.\n\nDo you want to proceed?`
+      );
+      if (!confirmUpdate) return;
+    } else {
+      const confirmDeclare = window.confirm(
+        `Are you sure you want to declare ${session.toUpperCase()} Result for "${market_name}"?\n\nPana: ${pana} | Digit: ${digit}\n\nWinning payouts will be credited to user wallets immediately.`
+      );
+      if (!confirmDeclare) return;
+    }
+
+    setAutoDeclareLoading(true);
+    try {
+      const payload = {
+        game_name: market_name,
+        date,
+        session
+      };
+      if (session === 'open') {
+        payload.open_pana = pana;
+        payload.open_result = digit;
+      } else {
+        payload.close_pana = pana;
+        payload.close_result = digit;
+      }
+
+      const res = await api.post('/admin/declare-result', payload, getHeaders());
+      if (res.data.success === '1') {
+        alert(res.data.msg || 'Result declared and winners credited successfully!');
+        setShowAutoWinnerModal(false);
+        fetchDeclaredResults(date);
+        fetchAdminCoins();
+        fetchAutoResults(date);
+      } else {
+        setAutoDeclareError(res.data.msg || 'Declaration failed');
+      }
+    } catch (err) {
+      console.error(err);
+      setAutoDeclareError(err.response?.data?.msg || err.response?.data?.error || 'Error declaring result.');
+    } finally {
+      setAutoDeclareLoading(false);
+    }
+  };
+
+  // Delete declared result for Auto Result table (Open, Close, or Full)
+  const handleAutoDeleteResult = async (marketName, session = 'all') => {
+    const targetDate = autoSelectedDate;
+    await handleDeleteDeclaredResult(marketName, targetDate, session);
+    fetchAutoResults(targetDate);
+  };
+
+  // Auto-refresh timer for Auto Result & Auto-Declare
+  useEffect(() => {
+    let interval = null;
+    if (activeTab === 'declare_result_auto') {
+      fetchAutoDeclareStatus();
+      if (autoAutoRefresh || isAutoDeclareActive) {
+        interval = setInterval(() => {
+          fetchAutoResults();
+          if (isAutoDeclareActive) {
+            triggerAutoDeclare();
+          }
+        }, 30000);
+      }
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [activeTab, autoAutoRefresh, isAutoDeclareActive, autoSelectedDate]);
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -2510,12 +3020,31 @@ const AdminDashboard = ({ setAdminAuth }) => {
             </div>
           </div>
 
-          {/* Declare Result */}
-          <div onClick={() => handleTabClick('declare_result')} style={sidebarItemStyle(activeTab === 'declare_result')}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-              <Target size={18} style={{ flexShrink: 0, color: activeTab === 'declare_result' ? '#f1673e' : '#a6b0cf' }} />
-              {(!isDesktopSidebarCollapsed || isMobile) && <span style={{ whiteSpace: 'nowrap' }}>Declare Result</span>}
+          {/* Declare Result (Collapsible: Manual Result & Auto Result) */}
+          <div>
+            <div onClick={() => toggleMenu('declare_result')} style={sidebarItemStyle(['declare_result', 'declare_result_manual', 'declare_result_auto'].includes(activeTab))}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                  <Target size={18} style={{ flexShrink: 0, color: ['declare_result', 'declare_result_manual', 'declare_result_auto'].includes(activeTab) ? '#f1673e' : '#a6b0cf' }} />
+                  {(!isDesktopSidebarCollapsed || isMobile) && <span style={{ whiteSpace: 'nowrap' }}>Declare Result</span>}
+                </div>
+                {(!isDesktopSidebarCollapsed || isMobile) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#a6b0cf' }}>
+                    {openMenus.declare_result ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </div>
+                )}
+              </div>
             </div>
+            {openMenus.declare_result && (!isDesktopSidebarCollapsed || isMobile) && (
+              <div>
+                <div onClick={() => handleTabClick('declare_result')} style={submenuItemStyle(activeTab === 'declare_result' || activeTab === 'declare_result_manual')}>
+                  1. Manual Result
+                </div>
+                <div onClick={() => handleTabClick('declare_result_auto')} style={submenuItemStyle(activeTab === 'declare_result_auto')}>
+                  2. Auto Result
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Report Management (Collapsible) */}
@@ -2774,9 +3303,9 @@ const AdminDashboard = ({ setAdminAuth }) => {
 
           {/* Settings (Collapsible) */}
           <div>
-            <div onClick={() => toggleMenu('settings')} style={sidebarItemStyle(['settings', 'contact_settings', 'sliders', 'how_to_play', 'auto_active'].includes(activeTab))}>
+            <div onClick={() => toggleMenu('settings')} style={sidebarItemStyle(['settings', 'contact_settings', 'sliders', 'how_to_play', 'auto_active', 'base_url', 'payment_gateway'].includes(activeTab))}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-                <Settings size={18} style={{ flexShrink: 0, color: ['settings', 'contact_settings', 'sliders', 'how_to_play', 'auto_active'].includes(activeTab) ? '#f1673e' : '#a6b0cf' }} />
+                <Settings size={18} style={{ flexShrink: 0, color: ['settings', 'contact_settings', 'sliders', 'how_to_play', 'auto_active', 'base_url', 'payment_gateway'].includes(activeTab) ? '#f1673e' : '#a6b0cf' }} />
                 {(!isDesktopSidebarCollapsed || isMobile) && <span style={{ whiteSpace: 'nowrap' }}>Settings</span>}
               </div>
               {(!isDesktopSidebarCollapsed || isMobile) && (
@@ -2789,6 +3318,9 @@ const AdminDashboard = ({ setAdminAuth }) => {
               <div>
                 <div onClick={() => handleTabClick('auto_active')} style={submenuItemStyle(activeTab === 'auto_active')}>
                   Auto Active Mode
+                </div>
+                <div onClick={() => handleTabClick('base_url')} style={submenuItemStyle(activeTab === 'base_url')}>
+                  🌐 Base URL (Auto Result)
                 </div>
                 <div onClick={() => handleTabClick('settings')} style={submenuItemStyle(activeTab === 'settings')}>
                   Main Settings
@@ -6895,9 +7427,328 @@ const AdminDashboard = ({ setAdminAuth }) => {
             <AdminSupportChat isMobile={isMobile} />
           )}
 
-          {/* VIEW: PAYMENT GATEWAYS & DEPOSIT MODE MANAGEMENT */}
-          {activeTab === 'payment_gateway' && (
-            <PaymentGatewayManager isMobile={isMobile} />
+          {/* VIEW: AUTO RESULT API BASE URL SETTINGS */}
+          {activeTab === 'base_url' && (
+            <div>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '1.2rem', color: '#343a40', textTransform: 'uppercase', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: '#556ee6' }}>🌐</span> Auto Result API Base URL Settings
+                  </h4>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: '#74788d' }}>
+                    Configure the external Matka results API Base URL and endpoint. All live auto result sync, winner calculations, and automated declarations use this URL.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleTabClick('declare_result_auto')}
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: '0.84rem',
+                      fontWeight: '700',
+                      backgroundColor: '#556ee6',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      boxShadow: '0 2px 6px rgba(85, 110, 230, 0.25)'
+                    }}
+                  >
+                    <span>⚡ Go to Auto Result Page</span>
+                  </button>
+                  <div style={{ fontSize: '0.8rem', color: '#74788d' }}>
+                    Settings / <span style={{ color: '#556ee6', fontWeight: '600' }}>Base URL</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Success / Error Banners */}
+              {autoResultUrlMsg && (
+                <div style={{ backgroundColor: '#def7ec', color: '#03543f', border: '1px solid #bcf0da', padding: '12px 18px', borderRadius: '6px', fontSize: '0.86rem', marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>✓</span>
+                  <span>{autoResultUrlMsg}</span>
+                </div>
+              )}
+              {autoResultUrlError && (
+                <div style={{ backgroundColor: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', padding: '12px 18px', borderRadius: '6px', fontSize: '0.86rem', marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>⚠️</span>
+                  <span>{autoResultUrlError}</span>
+                </div>
+              )}
+
+              {/* Main Configuration Card */}
+              <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '24px', border: '1px solid #eff2f7', boxShadow: '0 0.75rem 1.5rem rgba(18,38,63,.03)', marginBottom: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #eff2f7', paddingBottom: '16px', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#eef2ff', color: '#556ee6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem' }}>
+                      🔗
+                    </div>
+                    <div>
+                      <h5 style={{ margin: 0, fontSize: '1.05rem', color: '#343a40', fontWeight: '700' }}>
+                        API Provider Endpoint Configuration
+                      </h5>
+                      <span style={{ fontSize: '0.78rem', color: '#74788d' }}>
+                        The endpoint must return today's market list with open_pana, close_pana, timing, and status
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#f8fafc', padding: '6px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '0.78rem' }}>
+                    <span style={{ color: '#64748b', fontWeight: '600' }}>Current Target:</span>
+                    <code style={{ color: '#556ee6', fontWeight: 'bold' }}>{autoResultFullUrl || 'https://mumbai-mt-api.onrender.com/today'}</code>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSaveAutoResultUrlConfig}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px', marginBottom: '20px' }}>
+                    {/* Base URL Input */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: '#343a40', marginBottom: '6px' }}>
+                        API Base URL <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.9rem' }}>🌐</span>
+                        <input
+                          type="text"
+                          required
+                          value={autoResultBaseUrl}
+                          onChange={(e) => setAutoResultBaseUrl(e.target.value)}
+                          placeholder="e.g. https://mumbai-mt-api.onrender.com"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px 10px 36px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '0.88rem',
+                            outline: 'none',
+                            fontFamily: 'monospace'
+                          }}
+                        />
+                      </div>
+                      <span style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                        Domain origin URL of the Matka provider (e.g. <code>https://mumbai-mt-api.onrender.com</code>)
+                      </span>
+                    </div>
+
+                    {/* Endpoint Path Input */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: '#343a40', marginBottom: '6px' }}>
+                        Endpoint Relative Path <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.9rem' }}>📁</span>
+                        <input
+                          type="text"
+                          required
+                          value={autoResultEndpoint}
+                          onChange={(e) => setAutoResultEndpoint(e.target.value)}
+                          placeholder="/today"
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px 10px 36px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '0.88rem',
+                            outline: 'none',
+                            fontFamily: 'monospace'
+                          }}
+                        />
+                      </div>
+                      <span style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                        Relative path returning today's results (default: <code>/today</code>)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Complete Full URL Computed Preview */}
+                  <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 18px', marginBottom: '24px' }}>
+                    <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px' }}>
+                      Computed Full Request URL Preview
+                    </div>
+                    <div style={{ fontFamily: 'monospace', fontSize: '0.92rem', color: '#1e293b', fontWeight: '600', wordBreak: 'break-all' }}>
+                      {(() => {
+                        const b = (autoResultBaseUrl || '').trim().replace(/\/+$/, '');
+                        const ep = (autoResultEndpoint || '').trim().startsWith('/') ? autoResultEndpoint.trim() : `/${(autoResultEndpoint || '').trim()}`;
+                        return b ? (b.endsWith(ep) ? b : `${b}${ep}`) : 'https://mumbai-mt-api.onrender.com/today';
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Buttons Row */}
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      type="submit"
+                      disabled={autoResultUrlSaving}
+                      style={{
+                        padding: '10px 22px',
+                        backgroundColor: '#556ee6',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '0.88rem',
+                        fontWeight: '700',
+                        cursor: autoResultUrlSaving ? 'not-allowed' : 'pointer',
+                        boxShadow: '0 2px 6px rgba(85, 110, 230, 0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <span>💾</span>
+                      {autoResultUrlSaving ? 'Saving URL...' : 'Save Base URL'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleTestAutoResultUrl}
+                      disabled={autoResultUrlTesting}
+                      style={{
+                        padding: '10px 20px',
+                        backgroundColor: '#10b981',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '0.88rem',
+                        fontWeight: '700',
+                        cursor: autoResultUrlTesting ? 'not-allowed' : 'pointer',
+                        boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <span>🧪</span>
+                      {autoResultUrlTesting ? 'Testing Connection...' : 'Test Connection'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleResetAutoResultUrl}
+                      style={{
+                        padding: '10px 18px',
+                        backgroundColor: '#f1f5f9',
+                        color: '#475569',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        fontSize: '0.86rem',
+                        fontWeight: '600',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🔄 Reset to Default
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Live Test Results Card */}
+              {autoResultTestResult && (
+                <div style={{
+                  backgroundColor: '#ffffff',
+                  borderRadius: '10px',
+                  padding: '24px',
+                  border: '1px solid #bbf7d0',
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%)',
+                  boxShadow: '0 0.75rem 1.5rem rgba(18,38,63,.03)',
+                  marginBottom: '24px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '1.4rem' }}>✅</span>
+                      <div>
+                        <h5 style={{ margin: 0, fontSize: '1.05rem', color: '#166534', fontWeight: '800' }}>
+                          Connection Test Passed!
+                        </h5>
+                        <span style={{ fontSize: '0.8rem', color: '#15803d' }}>
+                          Successfully reached endpoint in {autoResultTestResult.duration_ms}ms • Received {autoResultTestResult.total_markets} markets
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleTabClick('declare_result_auto')}
+                      style={{
+                        padding: '6px 14px',
+                        backgroundColor: '#16a34a',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '0.8rem',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      View Live Markets Table →
+                    </button>
+                  </div>
+
+                  {autoResultTestResult.sample_markets && autoResultTestResult.sample_markets.length > 0 && (
+                    <div style={{ backgroundColor: '#ffffff', borderRadius: '6px', border: '1px solid #dcfce7', overflow: 'hidden' }}>
+                      <div style={{ padding: '8px 14px', backgroundColor: '#dcfce7', fontSize: '0.78rem', fontWeight: 'bold', color: '#166534' }}>
+                        Sample Markets Received (First {autoResultTestResult.sample_markets.length}):
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
+                            <th style={{ padding: '8px 12px', color: '#475569' }}>Market Name</th>
+                            <th style={{ padding: '8px 12px', color: '#475569' }}>Open Time</th>
+                            <th style={{ padding: '8px 12px', color: '#475569' }}>Close Time</th>
+                            <th style={{ padding: '8px 12px', color: '#475569', textAlign: 'center' }}>Live Result</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {autoResultTestResult.sample_markets.map((sm, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '8px 12px', fontWeight: 'bold', color: '#334155' }}>{sm.market_name || sm.game_name}</td>
+                              <td style={{ padding: '8px 12px', color: '#556ee6' }}>{sm.open_time}</td>
+                              <td style={{ padding: '8px 12px', color: '#059669' }}>{sm.close_time}</td>
+                              <td style={{ padding: '8px 12px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                                {sm.result_display || `${sm.open_pana || '***'}-${sm.jodi || '**'}-${sm.close_pana || '***'}`}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Provider Format Documentation Card */}
+              <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '20px 24px', border: '1px solid #eff2f7' }}>
+                <h5 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: '#343a40', fontWeight: '700' }}>
+                  ℹ️ Expected API Response Format
+                </h5>
+                <p style={{ margin: '0 0 10px 0', fontSize: '0.8rem', color: '#64748b', lineHeight: '1.5' }}>
+                  The endpoint configured above must return a JSON response with an array of markets for today:
+                </p>
+                <pre style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '12px 16px', fontSize: '0.78rem', color: '#334155', overflowX: 'auto', margin: 0 }}>
+{`{
+  "success": "1",
+  "total_markets": 21,
+  "current_date_ist": "2026-11-02",
+  "current_time_ist": "03:15:00 PM",
+  "data": [
+    {
+      "market_name": "KALYAN",
+      "open_time": "04:30 pm",
+      "close_time": "06:30 pm",
+      "open_pana": "123",
+      "open_digit": "6",
+      "close_pana": "***",
+      "close_digit": "*",
+      "jodi": "6*",
+      "status_label": "LIVE"
+    }
+  ]
+}`}
+                </pre>
+              </div>
+            </div>
           )}
 
           {/* VIEW: SETTINGS - MAIN SETTINGS (PHP main-settings.php parity) */}
@@ -8541,15 +9392,15 @@ const AdminDashboard = ({ setAdminAuth }) => {
             </div>
           )}
 
-          {/* VIEW: DECLARE RESULT */}
-          {activeTab === 'declare_result' && (
+          {/* VIEW: DECLARE RESULT (MANUAL) */}
+          {(activeTab === 'declare_result' || activeTab === 'declare_result_manual') && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h4 style={{ margin: 0, fontSize: '1.15rem', color: '#495057', textTransform: 'uppercase', fontWeight: '700' }}>
-                  Declare Game Result
+                  Declare Game Result (Manual)
                 </h4>
                 <div style={{ fontSize: '0.8rem', color: '#74788d' }}>
-                  Game Operations / <span style={{ color: '#556ee6' }}>Declare Result</span>
+                  Game Operations / <span style={{ color: '#556ee6' }}>Manual Result</span>
                 </div>
               </div>
 
@@ -8973,6 +9824,602 @@ const AdminDashboard = ({ setAdminAuth }) => {
                           </tr>
                         ))
                       )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW: AUTO RESULT (MUMBAI MT API SYNC) */}
+          {activeTab === 'declare_result_auto' && (
+            <div>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '1.2rem', color: '#343a40', textTransform: 'uppercase', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: '#f1673e' }}>⚡</span> Auto Game Result
+                  </h4>
+                  <p style={{ margin: '3px 0 0 0', fontSize: '0.82rem', color: '#74788d' }}>
+                    Endpoint: <code style={{ color: '#556ee6', fontWeight: 'bold', backgroundColor: '#f1f5f9', padding: '1px 6px', borderRadius: '4px' }}>{autoResultFullUrl || 'https://mumbai-mt-api.onrender.com/today'}</code> • Direct result declaration & settlements
+                  </p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleTabClick('base_url')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '8px 12px',
+                      fontSize: '0.82rem',
+                      fontWeight: '600',
+                      backgroundColor: '#ffffff',
+                      color: '#475569',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                    }}
+                    title="Configure Auto Result API Base URL in Settings"
+                  >
+                    <span>⚙️ API Base URL</span>
+                  </button>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#ffffff', padding: '6px 12px', borderRadius: '6px', border: '1px solid #ced4da', fontSize: '0.82rem', color: '#495057' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: autoAutoRefresh ? '#10b981' : '#a6b0cf', display: 'inline-block' }} />
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', userSelect: 'none', fontWeight: '600', margin: 0 }}>
+                      <input
+                        type="checkbox"
+                        checked={autoAutoRefresh}
+                        onChange={(e) => setAutoAutoRefresh(e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      Auto Sync (30s)
+                    </label>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => fetchAutoResults(autoSelectedDate)}
+                    disabled={autoLoading}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 14px',
+                      fontSize: '0.85rem',
+                      fontWeight: '600',
+                      backgroundColor: '#556ee6',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: autoLoading ? 'not-allowed' : 'pointer',
+                      boxShadow: '0 2px 6px rgba(85, 110, 230, 0.3)'
+                    }}
+                  >
+                    <span style={{ display: 'inline-block', transform: autoLoading ? 'rotate(180deg)' : 'none', transition: 'transform 0.5s ease' }}>🔄</span>
+                    {autoLoading ? 'Fetching API...' : 'Refresh API Results'}
+                  </button>
+
+                  <div style={{ fontSize: '0.8rem', color: '#74788d' }}>
+                    Game Operations / <span style={{ color: '#556ee6', fontWeight: '600' }}>Auto Result</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Auto Declaration Active / Deactive Switch Banner */}
+              <div style={{
+                backgroundColor: isAutoDeclareActive ? '#f0fdf4' : '#f8fafc',
+                border: isAutoDeclareActive ? '2px solid #22c55e' : '1px solid #e2e8f0',
+                borderRadius: '10px',
+                padding: '16px 20px',
+                marginBottom: '20px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '16px',
+                boxShadow: isAutoDeclareActive ? '0 4px 14px rgba(34, 197, 94, 0.15)' : '0 2px 4px rgba(0,0,0,0.02)',
+                transition: 'all 0.3s ease'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{
+                    width: '46px',
+                    height: '46px',
+                    borderRadius: '50%',
+                    backgroundColor: isAutoDeclareActive ? '#dcfce7' : '#f1f5f9',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.4rem'
+                  }}>
+                    {isAutoDeclareActive ? '⚡' : '💤'}
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <h4 style={{ margin: 0, fontSize: '1.05rem', color: '#1e293b', fontWeight: '800' }}>
+                        Auto Result Declaration & Instant Payout
+                      </h4>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        fontWeight: '800',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        backgroundColor: isAutoDeclareActive ? '#22c55e' : '#94a3b8',
+                        color: '#ffffff',
+                        letterSpacing: '0.5px'
+                      }}>
+                        {isAutoDeclareActive ? 'ACTIVE' : 'DEACTIVE'}
+                      </span>
+                    </div>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: isAutoDeclareActive ? '#15803d' : '#64748b' }}>
+                      {isAutoDeclareActive
+                        ? '✓ Auto Declare is ACTIVE. Pending market results from Mumbai MT API are automatically final-declared and winning amounts are credited to user wallets.'
+                        : '⚪ Auto Declare is DEACTIVE. Market results require manual review or one-click declaration.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {isAutoDeclareActive && (
+                    <button
+                      type="button"
+                      onClick={() => triggerAutoDeclare()}
+                      disabled={autoDeclareToggleLoading}
+                      style={{
+                        padding: '8px 14px',
+                        fontSize: '0.82rem',
+                        fontWeight: '700',
+                        backgroundColor: '#16a34a',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <span>⚡ Run Auto Declare Now</span>
+                    </button>
+                  )}
+
+                  {/* Toggle Switch Button */}
+                  <div
+                    onClick={autoDeclareToggleLoading ? null : handleToggleAutoDeclare}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      cursor: autoDeclareToggleLoading ? 'not-allowed' : 'pointer',
+                      padding: '6px 14px',
+                      borderRadius: '25px',
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #cbd5e1',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <span style={{
+                      fontSize: '0.84rem',
+                      fontWeight: '800',
+                      color: isAutoDeclareActive ? '#16a34a' : '#64748b'
+                    }}>
+                      {isAutoDeclareActive ? 'ACTIVE' : 'DEACTIVE'}
+                    </span>
+                    <div style={{
+                      width: '50px',
+                      height: '26px',
+                      backgroundColor: isAutoDeclareActive ? '#22c55e' : '#cbd5e1',
+                      borderRadius: '13px',
+                      position: 'relative',
+                      transition: 'background-color 0.25s ease'
+                    }}>
+                      <div style={{
+                        width: '20px',
+                        height: '20px',
+                        backgroundColor: '#ffffff',
+                        borderRadius: '50%',
+                        position: 'absolute',
+                        top: '3px',
+                        left: isAutoDeclareActive ? '27px' : '3px',
+                        transition: 'left 0.25s ease',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                      }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats Summary Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px', marginBottom: '22px' }}>
+                <div style={{ backgroundColor: '#ffffff', border: '1px solid #eff2f7', borderRadius: '8px', padding: '16px 18px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#74788d', textTransform: 'uppercase', fontWeight: '700' }}>Total Markets</span>
+                    <span style={{ backgroundColor: '#eef2ff', color: '#556ee6', padding: '4px 8px', borderRadius: '6px', fontSize: '0.85rem' }}>🏪</span>
+                  </div>
+                  <h3 style={{ margin: '8px 0 0 0', fontSize: '1.45rem', fontWeight: '800', color: '#343a40' }}>
+                    {autoMeta.total_markets || autoResults.length}
+                  </h3>
+                </div>
+
+                <div style={{ backgroundColor: '#ffffff', border: '1px solid #eff2f7', borderRadius: '8px', padding: '16px 18px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#74788d', textTransform: 'uppercase', fontWeight: '700' }}>API Declared</span>
+                    <span style={{ backgroundColor: '#def7ec', color: '#03543f', padding: '4px 8px', borderRadius: '6px', fontSize: '0.85rem' }}>✓</span>
+                  </div>
+                  <h3 style={{ margin: '8px 0 0 0', fontSize: '1.45rem', fontWeight: '800', color: '#10b981' }}>
+                    {autoMeta.declared_count || autoResults.filter(r => r.is_declared_today || (r.open_pana && r.open_pana !== '***')).length}
+                  </h3>
+                </div>
+
+                <div style={{ backgroundColor: '#ffffff', border: '1px solid #eff2f7', borderRadius: '8px', padding: '16px 18px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#74788d', textTransform: 'uppercase', fontWeight: '700' }}>System Declared</span>
+                    <span style={{ backgroundColor: '#fef3c7', color: '#b45309', padding: '4px 8px', borderRadius: '6px', fontSize: '0.85rem' }}>🏆</span>
+                  </div>
+                  <h3 style={{ margin: '8px 0 0 0', fontSize: '1.45rem', fontWeight: '800', color: '#f59e0b' }}>
+                    {declaredResultsList.length}
+                  </h3>
+                </div>
+
+                <div style={{ backgroundColor: '#ffffff', border: '1px solid #eff2f7', borderRadius: '8px', padding: '16px 18px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#74788d', textTransform: 'uppercase', fontWeight: '700' }}>API Time (IST)</span>
+                    <span style={{ backgroundColor: '#f3e8ff', color: '#7e22ce', padding: '4px 8px', borderRadius: '6px', fontSize: '0.85rem' }}>⏱️</span>
+                  </div>
+                  <h3 style={{ margin: '8px 0 0 0', fontSize: '1.15rem', fontWeight: '800', color: '#7e22ce', lineHeight: '1.4' }}>
+                    {autoMeta.current_time_ist || 'Live'}
+                  </h3>
+                  <div style={{ fontSize: '0.75rem', color: '#74788d' }}>{autoMeta.current_date_ist || autoSelectedDate}</div>
+                </div>
+              </div>
+
+              {/* Filter & Controls Card */}
+              <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '16px 20px', border: '1px solid #eff2f7', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1', minWidth: '240px', maxWidth: '450px' }}>
+                  <div style={{ position: 'relative', width: '100%' }}>
+                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#74788d', fontSize: '0.9rem' }}>🔍</span>
+                    <input
+                      type="text"
+                      placeholder="Search market by name (e.g. Sridevi, Kalyan)..."
+                      value={autoSearchTerm}
+                      onChange={(e) => setAutoSearchTerm(e.target.value)}
+                      style={{ width: '100%', padding: '9px 12px 9px 34px', borderRadius: '6px', border: '1px solid #ced4da', fontSize: '0.85rem', color: '#495057', outline: 'none' }}
+                    />
+                  </div>
+                  {autoSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setAutoSearchTerm('')}
+                      style={{ padding: '8px 12px', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.8rem', cursor: 'pointer', color: '#64748b' }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#495057' }}>Select Date:</label>
+                  <input
+                    type="date"
+                    value={autoSelectedDate}
+                    onChange={(e) => {
+                      setAutoSelectedDate(e.target.value);
+                      fetchAutoResults(e.target.value);
+                    }}
+                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ced4da', fontSize: '0.85rem', color: '#495057', outline: 'none' }}
+                  />
+                </div>
+              </div>
+
+              {/* Error Notice */}
+              {autoError && (
+                <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '12px 18px', borderRadius: '6px', fontSize: '0.86rem', marginBottom: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>⚠️ {autoError}</span>
+                  <button
+                    type="button"
+                    onClick={() => fetchAutoResults(autoSelectedDate)}
+                    style={{ padding: '4px 10px', backgroundColor: '#b91c1c', color: '#ffffff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 'bold' }}
+                  >
+                    Retry Now
+                  </button>
+                </div>
+              )}
+
+              {/* Markets Table */}
+              <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', padding: '20px', border: '1px solid #eff2f7', boxShadow: '0 0.75rem 1.5rem rgba(18,38,63,.03)' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #eff2f7', textAlign: 'left' }}>
+                        <th style={{ padding: '10px 12px', color: '#495057', width: '40px' }}>#</th>
+                        <th style={{ padding: '10px 14px', color: '#495057' }}>Market / Game Name</th>
+                        <th style={{ padding: '10px 14px', color: '#495057' }}>Timing</th>
+                        <th style={{ padding: '10px 14px', color: '#495057', textAlign: 'center' }}>API Live Result</th>
+                        <th style={{ padding: '10px 14px', color: '#495057', textAlign: 'center' }}>System Status</th>
+                        <th style={{ padding: '10px 14px', color: '#495057', textAlign: 'center', minWidth: '700px' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const filtered = autoResults.filter(m => {
+                          if (!autoSearchTerm) return true;
+                          const name = String(m.market_name || m.game_name || '').toLowerCase();
+                          return name.includes(autoSearchTerm.toLowerCase());
+                        });
+
+                        if (autoLoading && autoResults.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#74788d' }}>
+                                <div style={{ fontSize: '1.2rem', marginBottom: '8px' }}>🔄</div>
+                                <strong>Fetching Live Markets from Mumbai MT API...</strong>
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        if (filtered.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#74788d' }}>
+                                No markets matching your search.
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return filtered.map((m, idx) => {
+                          const marketName = m.market_name || m.game_name || '';
+                          const declaredRow = findDeclaredMarket(marketName, autoSelectedDate);
+                          const hasOpenDeclared = Boolean(declaredRow && declaredRow.open_panna && declaredRow.open_digit);
+                          const hasCloseDeclared = Boolean(declaredRow && declaredRow.close_panna && declaredRow.close_digit);
+                          const hasAnyDeclared = hasOpenDeclared || hasCloseDeclared;
+
+                          const isLive = m.status_label === 'LIVE' || m.status === '1';
+
+                          return (
+                            <tr key={m.id || idx} style={{ borderBottom: '1px solid #eff2f7', transition: 'background 0.15s ease' }}>
+                              <td style={{ padding: '12px 10px', color: '#74788d', fontWeight: 'bold' }}>{idx + 1}</td>
+                              <td style={{ padding: '12px 14px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <strong style={{ color: '#343a40', fontSize: '0.9rem' }}>{marketName}</strong>
+                                  <span style={{
+                                    fontSize: '0.68rem',
+                                    fontWeight: '700',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    backgroundColor: isLive ? '#def7ec' : '#f3f4f6',
+                                    color: isLive ? '#03543f' : '#6b7280'
+                                  }}>
+                                    {m.status_label || (isLive ? 'LIVE' : 'CLOSED')}
+                                  </span>
+                                </div>
+                              </td>
+                              <td style={{ padding: '12px 14px', color: '#495057', fontSize: '0.8rem' }}>
+                                <div><span style={{ color: '#556ee6', fontWeight: '600' }}>Open:</span> {m.open_time || '--'}</div>
+                                <div><span style={{ color: '#34c38f', fontWeight: '600' }}>Close:</span> {m.close_time || '--'}</div>
+                              </td>
+                              <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 12px', borderRadius: '6px', backgroundColor: '#f8f9fa', border: '1px solid #e2e8f0', fontFamily: 'monospace', fontSize: '0.88rem' }}>
+                                  <span style={{ color: m.open_pana && m.open_pana !== '***' ? '#556ee6' : '#94a3b8', fontWeight: 'bold' }}>
+                                    {m.open_pana || '***'}
+                                  </span>
+                                  <span style={{ color: '#64748b' }}>-</span>
+                                  <span style={{ color: m.jodi && m.jodi !== '**' ? '#f59e0b' : '#94a3b8', fontWeight: 'bold', backgroundColor: '#fef3c7', padding: '1px 5px', borderRadius: '3px' }}>
+                                    {m.jodi || (m.open_digit && m.close_digit ? `${m.open_digit}${m.close_digit}` : '**')}
+                                  </span>
+                                  <span style={{ color: '#64748b' }}>-</span>
+                                  <span style={{ color: m.close_pana && m.close_pana !== '***' ? '#10b981' : '#94a3b8', fontWeight: 'bold' }}>
+                                    {m.close_pana || '***'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                                  <span style={{
+                                    fontSize: '0.74rem',
+                                    padding: '2px 8px',
+                                    borderRadius: '4px',
+                                    backgroundColor: hasOpenDeclared ? '#eef2ff' : '#f1f5f9',
+                                    color: hasOpenDeclared ? '#4338ca' : '#94a3b8',
+                                    fontWeight: '600'
+                                  }}>
+                                    Open: {hasOpenDeclared ? `${declaredRow.open_panna} - ${declaredRow.open_digit}` : 'Not Declared'}
+                                  </span>
+                                  <span style={{
+                                    fontSize: '0.74rem',
+                                    padding: '2px 8px',
+                                    borderRadius: '4px',
+                                    backgroundColor: hasCloseDeclared ? '#def7ec' : '#f1f5f9',
+                                    color: hasCloseDeclared ? '#047857' : '#94a3b8',
+                                    fontWeight: '600'
+                                  }}>
+                                    Close: {hasCloseDeclared ? `${declaredRow.close_panna} - ${declaredRow.close_digit}` : 'Not Declared'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                                <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
+                                  {/* 1. Open Winner (Count) */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenAutoWinnerModal(m, 'open')}
+                                    title={`Open Winner (${autoWinnerCounts[marketName]?.open ?? 0}): View winners, edit bets, and credit payouts`}
+                                    style={{
+                                      padding: '5px 10px',
+                                      fontSize: '0.74rem',
+                                      backgroundColor: '#4f46e5',
+                                      color: '#ffffff',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontWeight: '700',
+                                      boxShadow: '0 1px 3px rgba(79, 70, 229, 0.35)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '5px'
+                                    }}
+                                  >
+                                    <span>🏆 Open Winner</span>
+                                    <span style={{
+                                      backgroundColor: 'rgba(255,255,255,0.28)',
+                                      padding: '1px 6px',
+                                      borderRadius: '10px',
+                                      fontSize: '0.72rem',
+                                      fontWeight: '800'
+                                    }}>
+                                      {autoWinnerCounts[marketName]?.open ?? 0}
+                                    </span>
+                                  </button>
+
+                                  {/* 2. Close Winner (Count) */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenAutoWinnerModal(m, 'close')}
+                                    title={`Close Winner (${autoWinnerCounts[marketName]?.close ?? 0}): View winners, edit bets, and credit payouts`}
+                                    style={{
+                                      padding: '5px 10px',
+                                      fontSize: '0.74rem',
+                                      backgroundColor: '#059669',
+                                      color: '#ffffff',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontWeight: '700',
+                                      boxShadow: '0 1px 3px rgba(5, 150, 105, 0.35)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '5px'
+                                    }}
+                                  >
+                                    <span>🏆 Close Winner</span>
+                                    <span style={{
+                                      backgroundColor: 'rgba(255,255,255,0.28)',
+                                      padding: '1px 6px',
+                                      borderRadius: '10px',
+                                      fontSize: '0.72rem',
+                                      fontWeight: '800'
+                                    }}>
+                                      {autoWinnerCounts[marketName]?.close ?? 0}
+                                    </span>
+                                  </button>
+
+                                  {/* 3. Open Result */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenAutoWinnerModal(m, 'open')}
+                                    title="Open Result: Preview winners & declare Open session"
+                                    style={{
+                                      padding: '5px 10px',
+                                      fontSize: '0.74rem',
+                                      backgroundColor: '#556ee6',
+                                      color: '#ffffff',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontWeight: '700',
+                                      boxShadow: '0 1px 3px rgba(85,110,230,0.3)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '3px'
+                                    }}
+                                  >
+                                    🎯 {hasOpenDeclared ? 'Update Open' : 'Open Result'}
+                                  </button>
+
+                                  {/* 2. Delete Open Result */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAutoDeleteResult(marketName, 'open')}
+                                    disabled={!hasOpenDeclared}
+                                    title={hasOpenDeclared ? "Delete Open Result & revert payouts" : "Open Result not declared"}
+                                    style={{
+                                      padding: '5px 9px',
+                                      fontSize: '0.74rem',
+                                      backgroundColor: hasOpenDeclared ? '#f87171' : '#f1f5f9',
+                                      color: hasOpenDeclared ? '#ffffff' : '#94a3b8',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: hasOpenDeclared ? 'pointer' : 'not-allowed',
+                                      fontWeight: '600'
+                                    }}
+                                  >
+                                    🗑️ Delete Open
+                                  </button>
+
+                                  {/* 3. Close Result */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenAutoWinnerModal(m, 'close')}
+                                    title="Close Result: Preview winners & declare Close session"
+                                    style={{
+                                      padding: '5px 10px',
+                                      fontSize: '0.74rem',
+                                      backgroundColor: '#10b981',
+                                      color: '#ffffff',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontWeight: '700',
+                                      boxShadow: '0 1px 3px rgba(16,185,129,0.3)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '3px'
+                                    }}
+                                  >
+                                    🔒 {hasCloseDeclared ? 'Update Close' : 'Close Result'}
+                                  </button>
+
+                                  {/* 4. Delete Close Result */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAutoDeleteResult(marketName, 'close')}
+                                    disabled={!hasCloseDeclared}
+                                    title={hasCloseDeclared ? "Delete Close Result & revert payouts" : "Close Result not declared"}
+                                    style={{
+                                      padding: '5px 9px',
+                                      fontSize: '0.74rem',
+                                      backgroundColor: hasCloseDeclared ? '#e11d48' : '#f1f5f9',
+                                      color: hasCloseDeclared ? '#ffffff' : '#94a3b8',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: hasCloseDeclared ? 'pointer' : 'not-allowed',
+                                      fontWeight: '600'
+                                    }}
+                                  >
+                                    🗑️ Delete Close
+                                  </button>
+
+                                  {/* 5. Delete Full Result */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAutoDeleteResult(marketName, 'all')}
+                                    disabled={!hasAnyDeclared}
+                                    title={hasAnyDeclared ? "Delete Entire Result & revert all payouts" : "No result declared"}
+                                    style={{
+                                      padding: '5px 9px',
+                                      fontSize: '0.74rem',
+                                      backgroundColor: hasAnyDeclared ? '#991b1b' : '#f1f5f9',
+                                      color: hasAnyDeclared ? '#ffffff' : '#94a3b8',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: hasAnyDeclared ? 'pointer' : 'not-allowed',
+                                      fontWeight: '600'
+                                    }}
+                                  >
+                                    ⚠️ Delete Full
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -11441,6 +12888,324 @@ const AdminDashboard = ({ setAdminAuth }) => {
                 style={{ padding: '9px 20px', backgroundColor: '#10b981', color: '#ffffff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
               >
                 ✓ CONFIRM & DECLARE RESULT
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AUTO RESULT WINNER PREVIEW & DECLARATION MODAL */}
+      {showAutoWinnerModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.65)',
+          zIndex: 10500,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '10px',
+            width: '100%',
+            maxWidth: '880px',
+            maxHeight: '92vh',
+            overflowY: 'auto',
+            padding: '24px',
+            boxShadow: '0 0.75rem 2rem rgba(0,0,0,0.2)'
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid #eff2f7', paddingBottom: '14px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h5 style={{ margin: 0, fontSize: '1.2rem', color: '#343a40', fontWeight: '800' }}>
+                    🏆 {autoModalData.session.toUpperCase()} Winners & Result Setup - {autoModalData.market_name}
+                  </h5>
+                  <span style={{
+                    fontSize: '0.72rem',
+                    fontWeight: '700',
+                    padding: '3px 10px',
+                    borderRadius: '12px',
+                    backgroundColor: autoModalData.session === 'open' ? '#eef2ff' : '#def7ec',
+                    color: autoModalData.session === 'open' ? '#4338ca' : '#03543f'
+                  }}>
+                    {autoModalData.session.toUpperCase()} SESSION • {autoWinnerPreview.totalWinners || 0} WINNER{autoWinnerPreview.totalWinners === 1 ? '' : 'S'}
+                  </span>
+                </div>
+                <p style={{ margin: '3px 0 0 0', fontSize: '0.8rem', color: '#74788d' }}>
+                  Date: <strong>{autoModalData.date}</strong> • Mode: Mumbai MT Auto Sync • {autoModalData.isDeclaredInSystem ? '⚠️ Current Status: Declared (Submitting will revert previous payouts)' : '✓ Not Yet Declared'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAutoWinnerModal(false)}
+                style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#74788d', lineHeight: 1 }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Error / Success messages in modal */}
+            {autoDeclareError && (
+              <div style={{ backgroundColor: '#fde8e8', color: '#e53e3e', border: '1px solid #f8b4b4', padding: '10px 14px', borderRadius: '4px', fontSize: '0.84rem', marginBottom: '14px' }}>
+                ⚠️ {autoDeclareError}
+              </div>
+            )}
+            {autoDeclareSuccess && (
+              <div style={{ backgroundColor: '#def7ec', color: '#03543f', border: '1px solid #bcf0da', padding: '10px 14px', borderRadius: '4px', fontSize: '0.84rem', marginBottom: '14px' }}>
+                ✓ {autoDeclareSuccess}
+              </div>
+            )}
+
+            {/* Pana and Single Digit selection box */}
+            <div style={{ backgroundColor: '#f8f9fa', border: '1px solid #e9ecef', borderRadius: '8px', padding: '14px 18px', marginBottom: '18px' }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#495057', marginBottom: '10px', textTransform: 'uppercase' }}>
+                🔢 Result Winning Numbers (Auto-Prefilled from API)
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '14px', alignItems: 'flex-end' }}>
+                {/* Pana input with dropdown */}
+                <div style={{ position: 'relative' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '4px' }}>
+                    {autoModalData.session.toUpperCase()} Pana (3 Digits) *
+                  </label>
+                  <input
+                    type="text"
+                    maxLength="3"
+                    placeholder="e.g. 123"
+                    value={autoModalData.pana}
+                    onFocus={() => setAutoShowPanaDropdown(true)}
+                    onBlur={() => setTimeout(() => setAutoShowPanaDropdown(false), 200)}
+                    onChange={(e) => {
+                      const cleanPana = e.target.value.replace(/\D/g, '').slice(0, 3);
+                      const newDigit = cleanPana.length === 3 ? getPanaSingleDigit(cleanPana) : autoModalData.digit;
+                      setAutoModalData(prev => ({ ...prev, pana: cleanPana, digit: newDigit }));
+                      setAutoShowPanaDropdown(true);
+                      if (cleanPana.length === 3 && newDigit) {
+                        fetchAutoPreviewWinners(autoModalData.market_name, autoModalData.date, autoModalData.session, cleanPana, newDigit);
+                      }
+                    }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem', fontWeight: 'bold', outline: 'none' }}
+                  />
+
+                  {/* Dropdown for Pana */}
+                  {autoShowPanaDropdown && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #ced4da',
+                      borderRadius: '0 0 6px 6px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      zIndex: 11000
+                    }}>
+                      {ALL_PANAS_220.filter(p => !autoModalData.pana || p.includes(autoModalData.pana)).slice(0, 50).map(p => {
+                        const digitVal = getPanaSingleDigit(p);
+                        return (
+                          <div
+                            key={p}
+                            onMouseDown={() => {
+                              setAutoModalData(prev => ({ ...prev, pana: p, digit: digitVal }));
+                              setAutoShowPanaDropdown(false);
+                              fetchAutoPreviewWinners(autoModalData.market_name, autoModalData.date, autoModalData.session, p, digitVal);
+                            }}
+                            style={{
+                              padding: '7px 12px',
+                              fontSize: '0.84rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              borderBottom: '1px solid #f0f0f0',
+                              backgroundColor: autoModalData.pana === p ? '#eef2ff' : '#ffffff'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = autoModalData.pana === p ? '#eef2ff' : '#ffffff'}
+                          >
+                            <span><strong>Pana:</strong> {p}</span>
+                            <span style={{ color: '#556ee6', fontWeight: 'bold', backgroundColor: '#eff2f7', padding: '1px 6px', borderRadius: '4px', fontSize: '0.78rem' }}>
+                              Digit: {digitVal}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Single Digit */}
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#495057', display: 'block', marginBottom: '4px' }}>
+                    {autoModalData.session.toUpperCase()} Digit (0-9) *
+                  </label>
+                  <input
+                    type="text"
+                    maxLength="1"
+                    placeholder="Auto digit"
+                    value={autoModalData.digit}
+                    onChange={(e) => {
+                      const cleanDigit = e.target.value.replace(/\D/g, '').slice(0, 1);
+                      setAutoModalData(prev => ({ ...prev, digit: cleanDigit }));
+                      if (autoModalData.pana.length === 3 && cleanDigit) {
+                        fetchAutoPreviewWinners(autoModalData.market_name, autoModalData.date, autoModalData.session, autoModalData.pana, cleanDigit);
+                      }
+                    }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '0.88rem', fontWeight: 'bold', outline: 'none', backgroundColor: '#ffffff' }}
+                  />
+                </div>
+
+                {/* Recalculate button */}
+                <button
+                  type="button"
+                  onClick={() => fetchAutoPreviewWinners(autoModalData.market_name, autoModalData.date, autoModalData.session, autoModalData.pana, autoModalData.digit)}
+                  disabled={autoPreviewLoading || !autoModalData.pana || !autoModalData.digit}
+                  style={{
+                    padding: '9px 16px',
+                    backgroundColor: '#eff2f7',
+                    color: '#556ee6',
+                    border: '1px solid #556ee6',
+                    borderRadius: '4px',
+                    fontSize: '0.84rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {autoPreviewLoading ? 'Calculating...' : '🔄 Recalculate Winners'}
+                </button>
+              </div>
+            </div>
+
+            {/* Summary cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '18px' }}>
+              <div style={{ backgroundColor: '#eef2ff', border: '1px solid #c7d2fe', padding: '14px', borderRadius: '8px', textAlign: 'center' }}>
+                <span style={{ fontSize: '0.78rem', color: '#4338ca', fontWeight: 'bold', textTransform: 'uppercase' }}>Total Winning Users</span>
+                <h3 style={{ margin: '4px 0 0 0', fontSize: '1.6rem', color: '#3730a3', fontWeight: '800' }}>
+                  {autoPreviewLoading ? '...' : autoWinnerPreview.totalWinners}
+                </h3>
+              </div>
+              <div style={{ backgroundColor: '#def7ec', border: '1px solid #bcf0da', padding: '14px', borderRadius: '8px', textAlign: 'center' }}>
+                <span style={{ fontSize: '0.78rem', color: '#03543f', fontWeight: 'bold', textTransform: 'uppercase' }}>Estimated Total Payout</span>
+                <h3 style={{ margin: '4px 0 0 0', fontSize: '1.6rem', color: '#046c4e', fontWeight: '800' }}>
+                  {autoPreviewLoading ? '...' : `₹ ${autoWinnerPreview.totalPayout}`}
+                </h3>
+              </div>
+            </div>
+
+            {/* Winners Table */}
+            <div style={{ overflowX: 'auto', marginBottom: '20px', maxHeight: '350px', border: '1px solid #eff2f7', borderRadius: '6px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #eff2f7', textAlign: 'left', position: 'sticky', top: 0, zIndex: 1 }}>
+                    <th style={{ padding: '10px 12px', color: '#495057' }}>User Details</th>
+                    <th style={{ padding: '10px 12px', color: '#495057' }}>Win Type</th>
+                    <th style={{ padding: '10px 12px', color: '#495057', textAlign: 'center' }}>Bid Points</th>
+                    <th style={{ padding: '10px 12px', color: '#495057', textAlign: 'center' }}>Rate</th>
+                    <th style={{ padding: '10px 12px', color: '#495057', textAlign: 'center' }}>Win Amount</th>
+                    <th style={{ padding: '10px 12px', color: '#495057', textAlign: 'center' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {autoPreviewLoading ? (
+                    <tr>
+                      <td colSpan="6" style={{ padding: '24px', textAlign: 'center', color: '#74788d' }}>
+                        Loading winning bids preview...
+                      </td>
+                    </tr>
+                  ) : autoWinnerPreview.winners.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" style={{ padding: '24px', textAlign: 'center', color: '#74788d' }}>
+                        No winning bids found for this result selection.
+                      </td>
+                    </tr>
+                  ) : (
+                    autoWinnerPreview.winners.map(w => (
+                      <tr key={w.id} style={{ borderBottom: '1px solid #eff2f7' }}>
+                        <td style={{ padding: '10px 12px' }}>
+                          <strong style={{ color: '#343a40' }}>{w.user_fullname || w.username}</strong>
+                          <div style={{ fontSize: '0.78rem', color: '#74788d' }}>📞 {w.username}</div>
+                        </td>
+                        <td style={{ padding: '10px 12px', fontWeight: '600', color: '#556ee6' }}>{w.winType || w.game_type}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 'bold' }}>₹ {w.points_action}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center', color: '#74788d' }}>1 : {w.rate}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 'bold', color: '#10b981', fontSize: '0.92rem' }}>
+                          ₹ {w.winAmount}
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                            {/* Edit Bid */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditBidModal(w);
+                                setEditBidForm({
+                                  open_pana: w.open_pana || '',
+                                  open_digit: w.open_digit || '',
+                                  close_pana: w.close_pana || '',
+                                  close_digit: w.close_digit || '',
+                                  points_action: w.points_action || ''
+                                });
+                              }}
+                              style={{ padding: '4px 10px', fontSize: '0.75rem', backgroundColor: '#556ee6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >
+                              ✏️ Edit Bid
+                            </button>
+
+                            {/* Delete Bid */}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBidInAutoPreview(w.id)}
+                              style={{ padding: '4px 10px', fontSize: '0.75rem', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setShowAutoWinnerModal(false)}
+                style={{ padding: '9px 18px', backgroundColor: '#74788d', color: '#ffffff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600' }}
+              >
+                Close Preview
+              </button>
+              <button
+                type="button"
+                onClick={handleAutoFinalDeclare}
+                disabled={autoDeclareLoading || !autoModalData.pana || !autoModalData.digit}
+                style={{
+                  padding: '10px 22px',
+                  backgroundColor: autoModalData.isDeclaredInSystem ? '#d97706' : '#10b981',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: (autoDeclareLoading || !autoModalData.pana || !autoModalData.digit) ? 'not-allowed' : 'pointer',
+                  fontWeight: 'bold',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+                }}
+              >
+                {autoDeclareLoading
+                  ? 'Declaring & Processing Payouts...'
+                  : autoModalData.isDeclaredInSystem
+                  ? `🔄 UPDATE RESULT & PAY NEW WINNERS (₹${autoWinnerPreview.totalPayout})`
+                  : `💰 CONFIRM & PAY WINNERS (₹${autoWinnerPreview.totalPayout})`
+                }
               </button>
             </div>
           </div>

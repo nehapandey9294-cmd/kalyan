@@ -42,6 +42,14 @@ router.post('/declare-result', verifyAdmin, adminController.declareResult);
 router.get('/declare-result/list', verifyAdmin, adminController.getDeclaredResults);
 router.post('/declare-result/delete', verifyAdmin, adminController.deleteDeclaredResult);
 router.post('/declare-result/preview', verifyAdmin, adminController.previewWinners);
+router.get('/auto-result/today', verifyAdmin, adminController.getAutoResultToday);
+router.get('/auto-result/status', verifyAdmin, adminController.getAutoDeclareStatus);
+router.post('/auto-result/toggle-auto', verifyAdmin, adminController.toggleAutoDeclareStatus);
+router.post('/auto-result/auto-declare', verifyAdmin, adminController.autoDeclareResults);
+router.post('/auto-result/winner-counts', verifyAdmin, adminController.getAutoWinnerCounts);
+router.get('/auto-result/url', verifyAdmin, adminController.getAutoResultUrlConfig);
+router.post('/auto-result/url', verifyAdmin, adminController.updateAutoResultUrlConfig);
+router.post('/auto-result/test-url', verifyAdmin, adminController.testAutoResultUrl);
 router.post('/reports/bid-history/delete', verifyAdmin, adminController.deleteBidHistory);
 
 // System Settings Management
