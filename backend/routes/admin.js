@@ -46,6 +46,8 @@ router.get('/auto-result/today', verifyAdmin, adminController.getAutoResultToday
 router.get('/auto-result/status', verifyAdmin, adminController.getAutoDeclareStatus);
 router.post('/auto-result/toggle-auto', verifyAdmin, adminController.toggleAutoDeclareStatus);
 router.post('/auto-result/auto-declare', verifyAdmin, adminController.autoDeclareResults);
+router.get('/auto-result/cron-status', verifyAdmin, adminController.getAutoResultCronStatus);
+router.post('/auto-result/cron-trigger', verifyAdmin, adminController.triggerAutoResultCron);
 router.post('/auto-result/winner-counts', verifyAdmin, adminController.getAutoWinnerCounts);
 router.get('/auto-result/url', verifyAdmin, adminController.getAutoResultUrlConfig);
 router.post('/auto-result/url', verifyAdmin, adminController.updateAutoResultUrlConfig);
@@ -181,5 +183,15 @@ router.post('/payment-gateways/set-auto-upi', verifyAdmin, paymentController.set
 router.post('/set-auto-upi', verifyAdmin, paymentController.setAutoUpi);
 router.post('/payment-gateways/set-active', verifyAdmin, paymentController.setActiveGateway);
 router.post('/payment-gateways/set-mode', verifyAdmin, paymentController.setDepositMode);
+
+// Database Manager Endpoints (Tables, Schema, Records, Edit, Delete)
+router.get('/database/tables', verifyAdmin, adminController.getDatabaseTables);
+router.get('/database/tables/:tableName/structure', verifyAdmin, adminController.getTableStructure);
+router.get('/database/tables/:tableName/records', verifyAdmin, adminController.getTableRecords);
+router.post('/database/tables/:tableName/records', verifyAdmin, adminController.createTableRecord);
+router.put('/database/tables/:tableName/records', verifyAdmin, adminController.updateTableRecord);
+router.post('/database/tables/:tableName/records/update', verifyAdmin, adminController.updateTableRecord);
+router.delete('/database/tables/:tableName/records', verifyAdmin, adminController.deleteTableRecord);
+router.post('/database/tables/:tableName/records/delete', verifyAdmin, adminController.deleteTableRecord);
 
 module.exports = router;

@@ -5,10 +5,11 @@ import {
   CheckCircle2, XCircle, Clock, Search, Trophy, Wallet, 
   ArrowUpRight, ShieldCheck, Sparkles, UserCheck, UserX, Eye,
   Home, Share2, Target, FileText, Settings, ChevronDown, ChevronRight, ChevronLeft, Menu, Maximize2, LogOut, Zap,
-  CreditCard, MessageSquare, Bell
+  CreditCard, MessageSquare, Bell, Database
 } from 'lucide-react';
 import PaymentGatewayManager from './PaymentGatewayManager';
 import AdminSupportChat from './AdminSupportChat';
+import DatabaseManager from './DatabaseManager';
 import chatSocket from '../../utils/chatSocket';
 import api from '../../utils/api';
 import { useAdminSession, clearAdminSession } from '../../utils/adminSession';
@@ -290,7 +291,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
       setOpenMenus(prev => ({ ...prev, games: true }));
     } else if (activeTab.startsWith('num_')) {
       setOpenMenus(prev => ({ ...prev, numbers: true }));
-    } else if (['settings', 'contact_settings', 'sliders', 'how_to_play', 'auto_active', 'base_url', 'payment_gateway'].includes(activeTab)) {
+    } else if (['settings', 'contact_settings', 'sliders', 'how_to_play', 'auto_active', 'base_url', 'payment_gateway', 'database_manager'].includes(activeTab)) {
       setOpenMenus(prev => ({ ...prev, settings: true }));
     }
   }, [activeTab]);
@@ -490,6 +491,8 @@ const AdminDashboard = ({ setAdminAuth }) => {
   const [autoAutoRefresh, setAutoAutoRefresh] = useState(false);
   const [isAutoDeclareActive, setIsAutoDeclareActive] = useState(() => localStorage.getItem('admin_auto_declare_active') === '1');
   const [autoDeclareToggleLoading, setAutoDeclareToggleLoading] = useState(false);
+  const [serverCronStatus, setServerCronStatus] = useState(null);
+  const [serverCronTriggering, setServerCronTriggering] = useState(false);
   const [autoWinnerCounts, setAutoWinnerCounts] = useState({});
   const [autoWinnerCountsLoading, setAutoWinnerCountsLoading] = useState(false);
 
@@ -1946,6 +1949,7 @@ const AdminDashboard = ({ setAdminAuth }) => {
       fetchDeclaredResults(declareDate);
     } else if (activeTab === 'declare_result_auto') {
       fetchAutoDeclareStatus();
+      fetchServerCronStatus();
       fetchAutoResultUrlConfig();
       fetchAutoResults();
     } else if (activeTab === 'base_url') {
@@ -2277,12 +2281,29 @@ const AdminDashboard = ({ setAdminAuth }) => {
     }
   };
 
+  // Fetch Server Background Cron Status
+  const fetchServerCronStatus = async () => {
+    try {
+      const res = await api.get('/admin/auto-result/cron-status', getHeaders());
+      if (res.data && res.data.success === '1') {
+        setServerCronStatus(res.data.data);
+        if (res.data.data.autoDeclareStatus !== undefined) {
+          const isActive = res.data.data.autoDeclareStatus === '1';
+          setIsAutoDeclareActive(isActive);
+          localStorage.setItem('admin_auto_declare_active', isActive ? '1' : '0');
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching server cron status:', err);
+    }
+  };
+
   // Toggle Auto Declare Status (Active / Deactive)
   const handleToggleAutoDeclare = async () => {
     const newStatus = !isAutoDeclareActive;
     const confirmMsg = newStatus
-      ? 'Are you sure you want to ACTIVATE Auto Result Declaration?\n\nWhen Active, results fetched from Mumbai MT API will be automatically declared and payouts will be credited to user wallets!'
-      : 'Are you sure you want to DEACTIVATE Auto Result Declaration?\n\nAutomatic result declaration will be paused.';
+      ? 'Are you sure you want to ACTIVATE Server Auto Result Declaration?\n\nWhen Active, results will be automatically synced from Mumbai MT API and declared 24/7 directly on the server in the background (even when you leave this page or close the browser), and winning amounts will be credited to user wallets!'
+      : 'Are you sure you want to DEACTIVATE Server Auto Result Declaration?\n\nAutomatic background sync and result declaration on the server will be paused.';
     if (!window.confirm(confirmMsg)) return;
 
     setAutoDeclareToggleLoading(true);
@@ -2291,9 +2312,11 @@ const AdminDashboard = ({ setAdminAuth }) => {
       if (res.data && res.data.success === '1') {
         setIsAutoDeclareActive(newStatus);
         localStorage.setItem('admin_auto_declare_active', newStatus ? '1' : '0');
-        if (newStatus) {
-          await triggerAutoDeclare();
-        }
+        // Immediately kick off server cron cycle
+        await api.post('/admin/auto-result/cron-trigger', {}, getHeaders()).catch(() => {});
+        await fetchServerCronStatus();
+        fetchDeclaredResults(autoSelectedDate);
+        fetchAutoResults(autoSelectedDate);
       } else {
         alert(res.data?.msg || 'Failed to update auto declare status');
       }
@@ -2305,21 +2328,23 @@ const AdminDashboard = ({ setAdminAuth }) => {
     }
   };
 
-  // Trigger Auto Declare for pending undeclared results
+  // Trigger Auto Declare / Server Cron Sync for pending undeclared results
   const triggerAutoDeclare = async (markets) => {
+    setServerCronTriggering(true);
     try {
-      const payload = markets && Array.isArray(markets) && markets.length > 0 ? { markets } : {};
-      const res = await api.post('/admin/auto-result/auto-declare', payload, getHeaders());
+      // Trigger immediate server cron sync
+      const res = await api.post('/admin/auto-result/cron-trigger', {}, getHeaders());
       if (res.data && res.data.success === '1') {
-        if (res.data.declaredCount > 0) {
-          fetchDeclaredResults(autoSelectedDate);
-          fetchAdminCoins();
-          fetchAutoResults(autoSelectedDate);
-        }
+        fetchDeclaredResults(autoSelectedDate);
+        fetchAdminCoins();
+        fetchAutoResults(autoSelectedDate);
+        fetchServerCronStatus();
         return res.data;
       }
     } catch (err) {
-      console.error('Error executing auto-declare:', err);
+      console.error('Error executing auto-declare / cron-trigger:', err);
+    } finally {
+      setServerCronTriggering(false);
     }
     return null;
   };
@@ -2651,17 +2676,16 @@ const AdminDashboard = ({ setAdminAuth }) => {
     fetchAutoResults(targetDate);
   };
 
-  // Auto-refresh timer for Auto Result & Auto-Declare
+  // Auto-refresh timer for Auto Result & Server Cron view
   useEffect(() => {
     let interval = null;
     if (activeTab === 'declare_result_auto') {
       fetchAutoDeclareStatus();
+      fetchServerCronStatus();
       if (autoAutoRefresh || isAutoDeclareActive) {
         interval = setInterval(() => {
           fetchAutoResults();
-          if (isAutoDeclareActive) {
-            triggerAutoDeclare();
-          }
+          fetchServerCronStatus();
         }, 30000);
       }
     }
@@ -3340,8 +3364,19 @@ const AdminDashboard = ({ setAdminAuth }) => {
                 <div onClick={handleDownloadDatabaseBackup} style={{ ...submenuItemStyle(false), color: '#34c38f', fontWeight: '600', cursor: downloadingDb ? 'wait' : 'pointer' }}>
                   {downloadingDb ? '⏳ Exporting DB...' : '💾 Download SQL Backup'}
                 </div>
+                <div onClick={() => handleTabClick('database_manager')} style={submenuItemStyle(activeTab === 'database_manager')}>
+                  🗄️ Database Tables & Records
+                </div>
               </div>
             )}
+          </div>
+
+          {/* Database Tables & Records Manager */}
+          <div onClick={() => handleTabClick('database_manager')} style={sidebarItemStyle(activeTab === 'database_manager')}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+              <Database size={18} style={{ flexShrink: 0, color: activeTab === 'database_manager' ? '#f1673e' : '#a6b0cf' }} />
+              {(!isDesktopSidebarCollapsed || isMobile) && <span style={{ whiteSpace: 'nowrap' }}>Database Tables</span>}
+            </div>
           </div>
 
           {/* Live Support Chat */}
@@ -7422,6 +7457,16 @@ const AdminDashboard = ({ setAdminAuth }) => {
             </div>
           )}
 
+          {/* VIEW: PAYMENT GATEWAYS & UPI APPS */}
+          {activeTab === 'payment_gateway' && (
+            <PaymentGatewayManager isMobile={isMobile} />
+          )}
+
+          {/* VIEW: DATABASE TABLES & RECORDS CRUD MANAGER */}
+          {activeTab === 'database_manager' && (
+            <DatabaseManager isMobile={isMobile} />
+          )}
+
           {/* VIEW: LIVE SUPPORT SOCKET CHAT MODULE */}
           {activeTab === 'support_chat' && (
             <AdminSupportChat isMobile={isMobile} />
@@ -9917,120 +9962,166 @@ const AdminDashboard = ({ setAdminAuth }) => {
                 padding: '16px 20px',
                 marginBottom: '20px',
                 display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '16px',
+                flexDirection: 'column',
+                gap: '12px',
                 boxShadow: isAutoDeclareActive ? '0 4px 14px rgba(34, 197, 94, 0.15)' : '0 2px 4px rgba(0,0,0,0.02)',
                 transition: 'all 0.3s ease'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                  <div style={{
-                    width: '46px',
-                    height: '46px',
-                    borderRadius: '50%',
-                    backgroundColor: isAutoDeclareActive ? '#dcfce7' : '#f1f5f9',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.4rem'
-                  }}>
-                    {isAutoDeclareActive ? '⚡' : '💤'}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '16px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{
+                      width: '46px',
+                      height: '46px',
+                      borderRadius: '50%',
+                      backgroundColor: isAutoDeclareActive ? '#dcfce7' : '#f1f5f9',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.4rem'
+                    }}>
+                      {isAutoDeclareActive ? '⚡' : '💤'}
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <h4 style={{ margin: 0, fontSize: '1.05rem', color: '#1e293b', fontWeight: '800' }}>
+                          Auto Result Declaration & Instant Payout
+                        </h4>
+                        <span style={{
+                          fontSize: '0.72rem',
+                          fontWeight: '800',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          backgroundColor: isAutoDeclareActive ? '#22c55e' : '#94a3b8',
+                          color: '#ffffff',
+                          letterSpacing: '0.5px'
+                        }}>
+                          {isAutoDeclareActive ? 'ACTIVE (24/7 CRON)' : 'DEACTIVE'}
+                        </span>
+                      </div>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: isAutoDeclareActive ? '#15803d' : '#64748b' }}>
+                        {isAutoDeclareActive
+                          ? '✓ Auto Declare is ACTIVE. Server background cron runs 24/7 every 30s to fetch Mumbai MT API results, auto-declare winners, and credit wallets — no need to keep this page open!'
+                          : '⚪ Auto Declare is DEACTIVE. Market results require manual review or one-click declaration.'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <h4 style={{ margin: 0, fontSize: '1.05rem', color: '#1e293b', fontWeight: '800' }}>
-                        Auto Result Declaration & Instant Payout
-                      </h4>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    {isAutoDeclareActive && (
+                      <button
+                        type="button"
+                        onClick={() => triggerAutoDeclare()}
+                        disabled={autoDeclareToggleLoading || serverCronTriggering}
+                        style={{
+                          padding: '8px 14px',
+                          fontSize: '0.82rem',
+                          fontWeight: '700',
+                          backgroundColor: '#16a34a',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: (autoDeclareToggleLoading || serverCronTriggering) ? 'not-allowed' : 'pointer',
+                          boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <span>{serverCronTriggering ? '⏳ Syncing Server...' : '⚡ Run Server Sync Now'}</span>
+                      </button>
+                    )}
+
+                    {/* Toggle Switch Button */}
+                    <div
+                      onClick={autoDeclareToggleLoading ? null : handleToggleAutoDeclare}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        cursor: autoDeclareToggleLoading ? 'not-allowed' : 'pointer',
+                        padding: '6px 14px',
+                        borderRadius: '25px',
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                        userSelect: 'none'
+                      }}
+                    >
                       <span style={{
-                        fontSize: '0.72rem',
+                        fontSize: '0.84rem',
                         fontWeight: '800',
-                        padding: '2px 8px',
-                        borderRadius: '12px',
-                        backgroundColor: isAutoDeclareActive ? '#22c55e' : '#94a3b8',
-                        color: '#ffffff',
-                        letterSpacing: '0.5px'
+                        color: isAutoDeclareActive ? '#16a34a' : '#64748b'
                       }}>
                         {isAutoDeclareActive ? 'ACTIVE' : 'DEACTIVE'}
                       </span>
+                      <div style={{
+                        width: '50px',
+                        height: '26px',
+                        backgroundColor: isAutoDeclareActive ? '#22c55e' : '#cbd5e1',
+                        borderRadius: '13px',
+                        position: 'relative',
+                        transition: 'background-color 0.25s ease'
+                      }}>
+                        <div style={{
+                          width: '20px',
+                          height: '20px',
+                          backgroundColor: '#ffffff',
+                          borderRadius: '50%',
+                          position: 'absolute',
+                          top: '3px',
+                          left: isAutoDeclareActive ? '27px' : '3px',
+                          transition: 'left 0.25s ease',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                        }} />
+                      </div>
                     </div>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: isAutoDeclareActive ? '#15803d' : '#64748b' }}>
-                      {isAutoDeclareActive
-                        ? '✓ Auto Declare is ACTIVE. Pending market results from Mumbai MT API are automatically final-declared and winning amounts are credited to user wallets.'
-                        : '⚪ Auto Declare is DEACTIVE. Market results require manual review or one-click declaration.'}
-                    </p>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {isAutoDeclareActive && (
-                    <button
-                      type="button"
-                      onClick={() => triggerAutoDeclare()}
-                      disabled={autoDeclareToggleLoading}
-                      style={{
-                        padding: '8px 14px',
-                        fontSize: '0.82rem',
-                        fontWeight: '700',
-                        backgroundColor: '#16a34a',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                      }}
-                    >
-                      <span>⚡ Run Auto Declare Now</span>
-                    </button>
-                  )}
-
-                  {/* Toggle Switch Button */}
-                  <div
-                    onClick={autoDeclareToggleLoading ? null : handleToggleAutoDeclare}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      cursor: autoDeclareToggleLoading ? 'not-allowed' : 'pointer',
-                      padding: '6px 14px',
-                      borderRadius: '25px',
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                      userSelect: 'none'
-                    }}
-                  >
+                {/* Server Background Cron Status Info Footer */}
+                <div style={{
+                  paddingTop: '10px',
+                  borderTop: '1px solid rgba(0,0,0,0.06)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: '0.78rem',
+                  color: isAutoDeclareActive ? '#15803d' : '#64748b',
+                  flexWrap: 'wrap',
+                  gap: '8px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{
-                      fontSize: '0.84rem',
-                      fontWeight: '800',
-                      color: isAutoDeclareActive ? '#16a34a' : '#64748b'
-                    }}>
-                      {isAutoDeclareActive ? 'ACTIVE' : 'DEACTIVE'}
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: isAutoDeclareActive ? '#16a34a' : '#9ca3af',
+                      display: 'inline-block',
+                      boxShadow: isAutoDeclareActive ? '0 0 6px #16a34a' : 'none'
+                    }} />
+                    <strong>Server Background Cron:</strong>
+                    <span>
+                      {isAutoDeclareActive
+                        ? 'Running automatically 24/7 on backend server (Every 30s) • Safe to close this page'
+                        : 'Stopped (Click switch to ACTIVATE 24/7 background sync)'}
                     </span>
-                    <div style={{
-                      width: '50px',
-                      height: '26px',
-                      backgroundColor: isAutoDeclareActive ? '#22c55e' : '#cbd5e1',
-                      borderRadius: '13px',
-                      position: 'relative',
-                      transition: 'background-color 0.25s ease'
-                    }}>
-                      <div style={{
-                        width: '20px',
-                        height: '20px',
-                        backgroundColor: '#ffffff',
-                        borderRadius: '50%',
-                        position: 'absolute',
-                        top: '3px',
-                        left: isAutoDeclareActive ? '27px' : '3px',
-                        transition: 'left 0.25s ease',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
-                      }} />
-                    </div>
                   </div>
+                  {serverCronStatus?.lastSyncTime && (
+                    <div style={{ color: '#4b5563' }}>
+                      Last Sync: <strong>{formatDisplayDateTime(serverCronStatus.lastSyncTime)}</strong>
+                      {serverCronStatus.lastDeclaredCount > 0 && (
+                        <span style={{ color: '#16a34a', fontWeight: 'bold', marginLeft: '6px' }}>
+                          (+{serverCronStatus.lastDeclaredCount} declared)
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

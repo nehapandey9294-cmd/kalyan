@@ -181,6 +181,10 @@ app.use((err, req, res, next) => {
 // Initialize WebSocket in-app chat module
 initChatSocket(server);
 
+// Initialize Server Background Auto-Result Cron (syncs & declares market results 24/7)
+const { initAutoResultCron } = require('./services/autoResultCron');
+
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT} (HTTP + WebSockets)`);
+  initAutoResultCron();
 });

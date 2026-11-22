@@ -242,4 +242,34 @@ router.post('/payment/create-order', verifyToken, paymentController.createOrder)
 router.post('/payment/submit-fund', verifyToken, paymentController.submitUpiFundRequest);
 router.post('/payment/verify-payment', verifyToken, paymentController.verifyPayment);
 
+// Background Auto Result Cron Webhook / Endpoint (Can be invoked by external crons or health checkers)
+router.get('/cron/auto-declare', async (req, res) => {
+  try {
+    const { runAutoResultCycle, getCronStatus } = require('../services/autoResultCron');
+    const result = await runAutoResultCycle(req.query?.force === '1');
+    return res.json({
+      success: '1',
+      msg: 'Auto Result Cron executed',
+      result,
+      status: getCronStatus()
+    });
+  } catch (err) {
+    return res.status(500).json({ success: '0', error: err.message });
+  }
+});
+router.post('/cron/auto-declare', async (req, res) => {
+  try {
+    const { runAutoResultCycle, getCronStatus } = require('../services/autoResultCron');
+    const result = await runAutoResultCycle(req.body?.force === true);
+    return res.json({
+      success: '1',
+      msg: 'Auto Result Cron executed',
+      result,
+      status: getCronStatus()
+    });
+  } catch (err) {
+    return res.status(500).json({ success: '0', error: err.message });
+  }
+});
+
 module.exports = router;

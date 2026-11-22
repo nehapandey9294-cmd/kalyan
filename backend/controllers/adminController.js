@@ -1442,123 +1442,183 @@ exports.toggleAutoDeclareStatus = async (req, res) => {
   }
 };
 
-// Automatically Declare Pending Results from Mumbai MT API
+// Core internal logic for automatically syncing and declaring pending results
+const executeAutoDeclareSync = async (inputMarkets = null) => {
+  let marketsData = inputMarkets;
+  if (!marketsData || !Array.isArray(marketsData) || marketsData.length === 0) {
+    const apiUrl = await getAutoResultApiUrl();
+    const apiRes = await fetchFromExternalUrl(apiUrl).catch((err) => {
+      console.error('[executeAutoDeclareSync] Failed to fetch external API URL:', apiUrl, err.message);
+      return null;
+    });
+    if (apiRes) {
+      if (Array.isArray(apiRes)) {
+        marketsData = apiRes;
+      } else if (Array.isArray(apiRes.data)) {
+        marketsData = apiRes.data;
+      } else if (Array.isArray(apiRes.result)) {
+        marketsData = apiRes.result;
+      } else if (Array.isArray(apiRes.markets)) {
+        marketsData = apiRes.markets;
+      }
+    }
+  }
+
+  if (!marketsData || !Array.isArray(marketsData) || marketsData.length === 0) {
+    return { success: '0', msg: 'No markets data available for auto declare from API', declaredCount: 0, declaredEvents: [] };
+  }
+
+  const todayDateStr = getISTDateStr();
+  const declaredEvents = [];
+
+  // Get all distinct games in game_time
+  let [dbGames] = await db.query(
+    `SELECT g1.* FROM game_time g1
+     INNER JOIN (
+       SELECT game, MIN(id) as min_id FROM game_time GROUP BY game
+     ) g2 ON g1.id = g2.min_id`
+  ).catch(() => [[]]);
+
+  if (!dbGames || dbGames.length === 0) {
+    const [chartGames] = await db.query("SELECT DISTINCT game_name as game FROM result_chart").catch(() => [[]]);
+    dbGames = chartGames || [];
+  }
+
+  const cleanStr = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  for (const m of marketsData) {
+    const apiMarketName = String(m.market_name || m.game_name || '').trim();
+    if (!apiMarketName) continue;
+
+    const matchedGame = dbGames.find(g => {
+      const gn = String(g.game || '').trim().toLowerCase();
+      const mn = apiMarketName.toLowerCase();
+      if (gn === mn) return true;
+      const cgn = cleanStr(gn);
+      const cmn = cleanStr(mn);
+      return cgn === cmn || (cgn.length >= 4 && cmn.includes(cgn)) || (cmn.length >= 4 && cgn.includes(cmn));
+    });
+    const canonicalGameName = matchedGame ? matchedGame.game : apiMarketName;
+
+    // Check current chart row for today
+    const [chartRows] = await db.query(
+      'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?) AND TRIM(LOWER(game_name)) = TRIM(LOWER(?))',
+      [todayDateStr, todayDateStr, `${todayDateStr}%`, canonicalGameName]
+    );
+    const chartRow = chartRows.length > 0 ? chartRows[0] : null;
+
+    // 1. Check Open declaration
+    const openPana = String(m.open_pana || '').trim();
+    const openDigit = String(m.open_digit || '').trim();
+    const hasValidOpen = /^\d{3}$/.test(openPana) && openPana !== '***';
+
+    if (hasValidOpen) {
+      const computedOpenDigit = /^\d$/.test(openDigit) && openDigit !== '*'
+        ? openDigit
+        : ((parseInt(openPana[0], 10) + parseInt(openPana[1], 10) + parseInt(openPana[2], 10)) % 10).toString();
+
+      const isOpenAlreadyDeclared = Boolean(chartRow && chartRow.open_panna && chartRow.open_digit);
+
+      if (!isOpenAlreadyDeclared) {
+        try {
+          await executeDeclareResultLogic(canonicalGameName, todayDateStr, 'open', openPana, computedOpenDigit, '', '');
+          declaredEvents.push({
+            game_name: canonicalGameName,
+            session: 'open',
+            pana: openPana,
+            digit: computedOpenDigit
+          });
+        } catch (e) {
+          console.error(`Error auto-declaring open for ${canonicalGameName}:`, e.message);
+        }
+      }
+    }
+
+    // Re-fetch chart row after potential open declaration
+    const [refreshedChart] = await db.query(
+      'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?) AND TRIM(LOWER(game_name)) = TRIM(LOWER(?))',
+      [todayDateStr, todayDateStr, `${todayDateStr}%`, canonicalGameName]
+    );
+    const updatedChartRow = refreshedChart.length > 0 ? refreshedChart[0] : null;
+
+    // 2. Check Close declaration
+    const closePana = String(m.close_pana || '').trim();
+    const closeDigit = String(m.close_digit || '').trim();
+    const hasValidClose = /^\d{3}$/.test(closePana) && closePana !== '***';
+
+    if (hasValidClose && updatedChartRow && updatedChartRow.open_panna && updatedChartRow.open_digit) {
+      const computedCloseDigit = /^\d$/.test(closeDigit) && closeDigit !== '*'
+        ? closeDigit
+        : ((parseInt(closePana[0], 10) + parseInt(closePana[1], 10) + parseInt(closePana[2], 10)) % 10).toString();
+
+      const isCloseAlreadyDeclared = Boolean(updatedChartRow.close_panna && updatedChartRow.close_digit);
+
+      if (!isCloseAlreadyDeclared) {
+        try {
+          await executeDeclareResultLogic(canonicalGameName, todayDateStr, 'close', '', '', closePana, computedCloseDigit);
+          declaredEvents.push({
+            game_name: canonicalGameName,
+            session: 'close',
+            pana: closePana,
+            digit: computedCloseDigit
+          });
+        } catch (e) {
+          console.error(`Error auto-declaring close for ${canonicalGameName}:`, e.message);
+        }
+      }
+    }
+  }
+
+  return {
+    success: '1',
+    declaredCount: declaredEvents.length,
+    declaredEvents,
+    totalMarketsEvaluated: marketsData.length,
+    msg: declaredEvents.length > 0
+      ? `Auto-declared ${declaredEvents.length} result(s) successfully!`
+      : 'No pending undeclared results found in API'
+  };
+};
+
+exports.executeAutoDeclareSync = executeAutoDeclareSync;
+
+// Automatically Declare Pending Results from Mumbai MT API (HTTP Controller)
 exports.autoDeclareResults = async (req, res) => {
   try {
-    let marketsData = req.body.markets;
-    if (!marketsData || !Array.isArray(marketsData) || marketsData.length === 0) {
-      const apiUrl = await getAutoResultApiUrl();
-      const apiRes = await fetchFromExternalUrl(apiUrl).catch(() => null);
-      if (apiRes && Array.isArray(apiRes.data)) {
-        marketsData = apiRes.data;
-      }
-    }
-
-    if (!marketsData || !Array.isArray(marketsData)) {
-      return res.json({ success: '0', msg: 'No markets data available for auto declare', declaredCount: 0 });
-    }
-
-    const todayDateStr = getISTDateStr();
-    const declaredEvents = [];
-
-    // Get all distinct games in game_time
-    const [dbGames] = await db.query(
-      `SELECT g1.* FROM game_time g1
-       INNER JOIN (
-         SELECT game, MIN(id) as min_id FROM game_time GROUP BY game
-       ) g2 ON g1.id = g2.min_id`
-    ).catch(() => [[]]);
-
-    for (const m of marketsData) {
-      const apiMarketName = String(m.market_name || m.game_name || '').trim();
-      if (!apiMarketName) continue;
-
-      const matchedGame = dbGames.find(g => {
-        const gn = String(g.game || '').trim().toLowerCase();
-        const mn = apiMarketName.toLowerCase();
-        return gn === mn || mn.includes(gn) || gn.includes(mn);
-      });
-      const canonicalGameName = matchedGame ? matchedGame.game : apiMarketName;
-
-      // Check current chart row for today
-      const [chartRows] = await db.query(
-        'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?) AND TRIM(LOWER(game_name)) = TRIM(LOWER(?))',
-        [todayDateStr, todayDateStr, `${todayDateStr}%`, canonicalGameName]
-      );
-      const chartRow = chartRows.length > 0 ? chartRows[0] : null;
-
-      // 1. Check Open declaration
-      const openPana = String(m.open_pana || '').trim();
-      const openDigit = String(m.open_digit || '').trim();
-      const hasValidOpen = /^\d{3}$/.test(openPana) && openPana !== '***';
-
-      if (hasValidOpen) {
-        const computedOpenDigit = /^\d$/.test(openDigit) && openDigit !== '*'
-          ? openDigit
-          : ((parseInt(openPana[0], 10) + parseInt(openPana[1], 10) + parseInt(openPana[2], 10)) % 10).toString();
-
-        const isOpenAlreadyDeclared = Boolean(chartRow && chartRow.open_panna && chartRow.open_digit);
-
-        if (!isOpenAlreadyDeclared) {
-          try {
-            await executeDeclareResultLogic(canonicalGameName, todayDateStr, 'open', openPana, computedOpenDigit, '', '');
-            declaredEvents.push({
-              game_name: canonicalGameName,
-              session: 'open',
-              pana: openPana,
-              digit: computedOpenDigit
-            });
-          } catch (e) {
-            console.error(`Error auto-declaring open for ${canonicalGameName}:`, e.message);
-          }
-        }
-      }
-
-      // Re-fetch chart row after potential open declaration
-      const [refreshedChart] = await db.query(
-        'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?) AND TRIM(LOWER(game_name)) = TRIM(LOWER(?))',
-        [todayDateStr, todayDateStr, `${todayDateStr}%`, canonicalGameName]
-      );
-      const updatedChartRow = refreshedChart.length > 0 ? refreshedChart[0] : null;
-
-      // 2. Check Close declaration
-      const closePana = String(m.close_pana || '').trim();
-      const closeDigit = String(m.close_digit || '').trim();
-      const hasValidClose = /^\d{3}$/.test(closePana) && closePana !== '***';
-
-      if (hasValidClose && updatedChartRow && updatedChartRow.open_panna && updatedChartRow.open_digit) {
-        const computedCloseDigit = /^\d$/.test(closeDigit) && closeDigit !== '*'
-          ? closeDigit
-          : ((parseInt(closePana[0], 10) + parseInt(closePana[1], 10) + parseInt(closePana[2], 10)) % 10).toString();
-
-        const isCloseAlreadyDeclared = Boolean(updatedChartRow.close_panna && updatedChartRow.close_digit);
-
-        if (!isCloseAlreadyDeclared) {
-          try {
-            await executeDeclareResultLogic(canonicalGameName, todayDateStr, 'close', '', '', closePana, computedCloseDigit);
-            declaredEvents.push({
-              game_name: canonicalGameName,
-              session: 'close',
-              pana: closePana,
-              digit: computedCloseDigit
-            });
-          } catch (e) {
-            console.error(`Error auto-declaring close for ${canonicalGameName}:`, e.message);
-          }
-        }
-      }
-    }
-
-    return res.json({
-      success: '1',
-      declaredCount: declaredEvents.length,
-      declaredEvents,
-      msg: declaredEvents.length > 0
-        ? `Auto-declared ${declaredEvents.length} result(s) successfully!`
-        : 'No pending undeclared results found in API'
-    });
+    const result = await executeAutoDeclareSync(req.body?.markets);
+    return res.json(result);
   } catch (err) {
     console.error('autoDeclareResults error:', err);
+    return res.status(500).json({ success: '0', error: err.message });
+  }
+};
+
+// Get Live Status of Background Auto Result Cron
+exports.getAutoResultCronStatus = async (req, res) => {
+  try {
+    const { getCronStatus } = require('../services/autoResultCron');
+    return res.json({
+      success: '1',
+      data: getCronStatus()
+    });
+  } catch (err) {
+    console.error('getAutoResultCronStatus error:', err);
+    return res.status(500).json({ success: '0', error: err.message });
+  }
+};
+
+// Manually trigger immediate Background Auto Result Cron run
+exports.triggerAutoResultCron = async (req, res) => {
+  try {
+    const { runAutoResultCycle, getCronStatus } = require('../services/autoResultCron');
+    const syncResult = await runAutoResultCycle(true);
+    return res.json({
+      success: '1',
+      result: syncResult,
+      cronStatus: getCronStatus()
+    });
+  } catch (err) {
+    console.error('triggerAutoResultCron error:', err);
     return res.status(500).json({ success: '0', error: err.message });
   }
 };
@@ -4384,3 +4444,390 @@ exports.downloadDatabaseBackup = async (req, res) => {
     res.end();
   }
 };
+
+// ============================================================================
+// DATABASE MANAGER CONTROLLER METHODS (Tables, Structure, Records, Edit, Delete)
+// ============================================================================
+
+function isValidDbIdentifier(name) {
+  return typeof name === 'string' && /^[a-zA-Z0-9_]{1,64}$/.test(name);
+}
+
+async function verifyTableExists(tableName) {
+  if (!isValidDbIdentifier(tableName)) return false;
+  try {
+    const [rows] = await db.query(
+      "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1",
+      [tableName]
+    );
+    return rows && rows.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+// 1. Get list of all tables with row count and metadata
+exports.getDatabaseTables = async (req, res) => {
+  try {
+    let tables = [];
+    try {
+      const [schemaTables] = await db.query(`
+        SELECT 
+          TABLE_NAME as name,
+          COALESCE(TABLE_ROWS, 0) as estimated_rows,
+          COALESCE(DATA_LENGTH, 0) as data_length,
+          COALESCE(INDEX_LENGTH, 0) as index_length,
+          AUTO_INCREMENT as auto_increment,
+          CREATE_TIME as created_at,
+          UPDATE_TIME as updated_at,
+          TABLE_COMMENT as comment
+        FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'
+        ORDER BY TABLE_NAME ASC
+      `);
+      tables = schemaTables;
+    } catch (schemaErr) {
+      // Fallback if information_schema query fails
+      const [rawTables] = await db.query("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'");
+      tables = rawTables.map(t => ({
+        name: Object.values(t)[0],
+        estimated_rows: 0,
+        data_length: 0
+      }));
+    }
+
+    res.json({
+      success: '1',
+      data: tables || []
+    });
+  } catch (err) {
+    console.error('Error in getDatabaseTables:', err);
+    res.status(500).json({ success: '0', error: 'Failed to fetch database tables: ' + err.message });
+  }
+};
+
+// 2. Get table structure (columns, types, keys, primary key, row count)
+exports.getTableStructure = async (req, res) => {
+  try {
+    const { tableName } = req.params;
+    if (!isValidDbIdentifier(tableName) || !(await verifyTableExists(tableName))) {
+      return res.status(400).json({ success: '0', error: 'Invalid or non-existent table name' });
+    }
+
+    const [columns] = await db.query(`SHOW FULL COLUMNS FROM \`${tableName}\``);
+    
+    // Determine Primary Key
+    let primaryKey = null;
+    for (const col of columns) {
+      if (col.Key === 'PRI') {
+        primaryKey = col.Field;
+        break;
+      }
+    }
+    if (!primaryKey) {
+      const idCol = columns.find(c => c.Field.toLowerCase() === 'id');
+      if (idCol) primaryKey = idCol.Field;
+    }
+
+    // Get exact row count
+    let totalRecords = 0;
+    try {
+      const [countResult] = await db.query(`SELECT COUNT(*) as exact_count FROM \`${tableName}\``);
+      totalRecords = countResult[0]?.exact_count ?? 0;
+    } catch (_) {}
+
+    res.json({
+      success: '1',
+      data: {
+        tableName,
+        primaryKey,
+        totalRecords,
+        columns: columns.map(col => ({
+          field: col.Field,
+          type: col.Type,
+          collation: col.Collation,
+          null: col.Null,
+          key: col.Key,
+          default: col.Default,
+          extra: col.Extra,
+          comment: col.Comment
+        }))
+      }
+    });
+  } catch (err) {
+    console.error('Error in getTableStructure:', err);
+    res.status(500).json({ success: '0', error: 'Failed to fetch table structure: ' + err.message });
+  }
+};
+
+// 3. Get table records (paginated, searchable, sortable)
+exports.getTableRecords = async (req, res) => {
+  try {
+    const { tableName } = req.params;
+    if (!isValidDbIdentifier(tableName) || !(await verifyTableExists(tableName))) {
+      return res.status(400).json({ success: '0', error: 'Invalid or non-existent table name' });
+    }
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(5, parseInt(req.query.limit, 10) || 20));
+    const offset = (page - 1) * limit;
+    const search = (req.query.search || '').trim();
+    const sortField = req.query.sortField;
+    const sortOrder = (req.query.sortOrder || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+    // Get columns
+    const [columns] = await db.query(`SHOW FULL COLUMNS FROM \`${tableName}\``);
+    const validColumnNames = columns.map(c => c.Field);
+
+    // Primary key detection
+    let primaryKey = null;
+    const priCol = columns.find(c => c.Key === 'PRI');
+    if (priCol) primaryKey = priCol.Field;
+    else {
+      const idCol = columns.find(c => c.Field.toLowerCase() === 'id');
+      if (idCol) primaryKey = idCol.Field;
+      else if (validColumnNames.length > 0) primaryKey = validColumnNames[0];
+    }
+
+    // Build search where clause
+    let whereClause = '';
+    const params = [];
+    if (search) {
+      const searchableCols = columns.filter(c => {
+        const type = c.Type.toLowerCase();
+        return (
+          type.includes('char') || 
+          type.includes('text') || 
+          type.includes('int') || 
+          type.includes('date') ||
+          type.includes('time') ||
+          type.includes('decimal') ||
+          type.includes('double')
+        );
+      });
+      if (searchableCols.length > 0) {
+        const conditions = searchableCols.map(c => `\`${c.Field}\` LIKE ?`);
+        whereClause = ` WHERE (${conditions.join(' OR ')})`;
+        for (let i = 0; i < searchableCols.length; i++) {
+          params.push(`%${search}%`);
+        }
+      }
+    }
+
+    // Count total records
+    const [countRows] = await db.query(`SELECT COUNT(*) as total FROM \`${tableName}\`${whereClause}`, params);
+    const total = countRows[0]?.total || 0;
+
+    // Sorting
+    let orderBy = '';
+    if (sortField && validColumnNames.includes(sortField)) {
+      orderBy = ` ORDER BY \`${sortField}\` ${sortOrder}`;
+    } else if (primaryKey && validColumnNames.includes(primaryKey)) {
+      orderBy = ` ORDER BY \`${primaryKey}\` DESC`;
+    }
+
+    // Records query
+    const queryParams = [...params, limit, offset];
+    const [records] = await db.query(`SELECT * FROM \`${tableName}\`${whereClause}${orderBy} LIMIT ? OFFSET ?`, queryParams);
+
+    res.json({
+      success: '1',
+      data: {
+        records: records || [],
+        total,
+        page,
+        limit,
+        primaryKey,
+        columns: columns.map(c => ({
+          field: c.Field,
+          type: c.Type,
+          key: c.Key,
+          null: c.Null,
+          default: c.Default,
+          extra: c.Extra,
+          comment: c.Comment
+        }))
+      }
+    });
+  } catch (err) {
+    console.error('Error in getTableRecords:', err);
+    res.status(500).json({ success: '0', error: 'Failed to fetch table records: ' + err.message });
+  }
+};
+
+// 4. Create new record in table
+exports.createTableRecord = async (req, res) => {
+  try {
+    const { tableName } = req.params;
+    if (!isValidDbIdentifier(tableName) || !(await verifyTableExists(tableName))) {
+      return res.status(400).json({ success: '0', error: 'Invalid or non-existent table name' });
+    }
+
+    const [columns] = await db.query(`SHOW FULL COLUMNS FROM \`${tableName}\``);
+    const validCols = {};
+    for (const c of columns) {
+      validCols[c.Field] = c;
+    }
+
+    const inputData = req.body.data || req.body;
+    if (!inputData || typeof inputData !== 'object') {
+      return res.status(400).json({ success: '0', error: 'Invalid record data' });
+    }
+
+    const fieldsToInsert = [];
+    const valuesToInsert = [];
+
+    for (const [key, value] of Object.entries(inputData)) {
+      if (validCols[key]) {
+        const colDef = validCols[key];
+        // If auto_increment and value is empty, skip to let MySQL assign auto id
+        if (colDef.Extra && colDef.Extra.includes('auto_increment') && (value === undefined || value === null || value === '')) {
+          continue;
+        }
+        fieldsToInsert.push(`\`${key}\``);
+        valuesToInsert.push(value === '' && colDef.Null === 'YES' ? null : value);
+      }
+    }
+
+    if (fieldsToInsert.length === 0) {
+      return res.status(400).json({ success: '0', error: 'No valid column values provided' });
+    }
+
+    const placeholders = fieldsToInsert.map(() => '?').join(', ');
+    const sql = `INSERT INTO \`${tableName}\` (${fieldsToInsert.join(', ')}) VALUES (${placeholders})`;
+    const [result] = await db.query(sql, valuesToInsert);
+
+    res.json({
+      success: '1',
+      message: 'Record created successfully',
+      insertId: result.insertId,
+      affectedRows: result.affectedRows
+    });
+  } catch (err) {
+    console.error('Error in createTableRecord:', err);
+    res.status(500).json({ success: '0', error: 'Failed to create record: ' + err.message });
+  }
+};
+
+// 5. Update record in table (Edit)
+exports.updateTableRecord = async (req, res) => {
+  try {
+    const { tableName } = req.params;
+    if (!isValidDbIdentifier(tableName) || !(await verifyTableExists(tableName))) {
+      return res.status(400).json({ success: '0', error: 'Invalid or non-existent table name' });
+    }
+
+    const [columns] = await db.query(`SHOW FULL COLUMNS FROM \`${tableName}\``);
+    const validCols = {};
+    let detectedPk = null;
+    for (const c of columns) {
+      validCols[c.Field] = c;
+      if (c.Key === 'PRI' && !detectedPk) detectedPk = c.Field;
+    }
+    if (!detectedPk && validCols['id']) detectedPk = 'id';
+
+    const { primaryKey, data } = req.body;
+    let pkCol = detectedPk;
+    let pkVal = null;
+
+    if (primaryKey && typeof primaryKey === 'object') {
+      pkCol = primaryKey.col || primaryKey.name || primaryKey.field || detectedPk;
+      pkVal = primaryKey.val !== undefined ? primaryKey.val : primaryKey.value;
+    } else if (primaryKey !== undefined) {
+      pkVal = primaryKey;
+    } else if (data && detectedPk && data[detectedPk] !== undefined) {
+      pkVal = data[detectedPk];
+    }
+
+    if (!pkCol || !validCols[pkCol] || pkVal === undefined || pkVal === null) {
+      return res.status(400).json({ success: '0', error: 'Primary key is required to identify the record to update' });
+    }
+
+    if (!data || typeof data !== 'object') {
+      return res.status(400).json({ success: '0', error: 'Update data is required' });
+    }
+
+    const setClauses = [];
+    const setValues = [];
+
+    for (const [key, val] of Object.entries(data)) {
+      // Don't update primary key in SET clause
+      if (key === pkCol) continue;
+      if (validCols[key]) {
+        const colDef = validCols[key];
+        setClauses.push(`\`${key}\` = ?`);
+        setValues.push(val === '' && colDef.Null === 'YES' ? null : val);
+      }
+    }
+
+    if (setClauses.length === 0) {
+      return res.status(400).json({ success: '0', error: 'No fields provided for update' });
+    }
+
+    setValues.push(pkVal);
+    const sql = `UPDATE \`${tableName}\` SET ${setClauses.join(', ')} WHERE \`${pkCol}\` = ? LIMIT 1`;
+    const [result] = await db.query(sql, setValues);
+
+    res.json({
+      success: '1',
+      message: 'Record updated successfully',
+      affectedRows: result.affectedRows
+    });
+  } catch (err) {
+    console.error('Error in updateTableRecord:', err);
+    res.status(500).json({ success: '0', error: 'Failed to update record: ' + err.message });
+  }
+};
+
+// 6. Delete record from table
+exports.deleteTableRecord = async (req, res) => {
+  try {
+    const { tableName } = req.params;
+    if (!isValidDbIdentifier(tableName) || !(await verifyTableExists(tableName))) {
+      return res.status(400).json({ success: '0', error: 'Invalid or non-existent table name' });
+    }
+
+    const [columns] = await db.query(`SHOW FULL COLUMNS FROM \`${tableName}\``);
+    const validCols = {};
+    let detectedPk = null;
+    for (const c of columns) {
+      validCols[c.Field] = c;
+      if (c.Key === 'PRI' && !detectedPk) detectedPk = c.Field;
+    }
+    if (!detectedPk && validCols['id']) detectedPk = 'id';
+
+    const primaryKey = req.body?.primaryKey || req.query?.primaryKey;
+    let pkCol = detectedPk;
+    let pkVal = null;
+
+    if (primaryKey && typeof primaryKey === 'object') {
+      pkCol = primaryKey.col || primaryKey.name || primaryKey.field || detectedPk;
+      pkVal = primaryKey.val !== undefined ? primaryKey.val : primaryKey.value;
+    } else if (primaryKey !== undefined) {
+      pkVal = primaryKey;
+    } else if (req.query?.pkVal !== undefined) {
+      pkVal = req.query.pkVal;
+      if (req.query.pkCol) pkCol = req.query.pkCol;
+    } else if (req.body?.id !== undefined) {
+      pkVal = req.body.id;
+      pkCol = 'id';
+    }
+
+    if (!pkCol || !validCols[pkCol] || pkVal === undefined || pkVal === null) {
+      return res.status(400).json({ success: '0', error: 'Primary key is required to delete the record' });
+    }
+
+    const sql = `DELETE FROM \`${tableName}\` WHERE \`${pkCol}\` = ? LIMIT 1`;
+    const [result] = await db.query(sql, [pkVal]);
+
+    res.json({
+      success: '1',
+      message: 'Record deleted successfully',
+      affectedRows: result.affectedRows
+    });
+  } catch (err) {
+    console.error('Error in deleteTableRecord:', err);
+    res.status(500).json({ success: '0', error: 'Failed to delete record: ' + err.message });
+  }
+};
+
