@@ -1442,6 +1442,34 @@ exports.toggleAutoDeclareStatus = async (req, res) => {
   }
 };
 
+// Robust market matcher: ensures session suffixes (night, morning, day) match strictly,
+// preventing substring collisions like 'KALYAN' matching 'KALYAN NIGHT' or 'KALYAN MORNING'.
+const isSameMarket = (nameA, nameB) => {
+  if (!nameA || !nameB) return false;
+  const cleanA = String(nameA).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const cleanB = String(nameB).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!cleanA || !cleanB) return false;
+  if (cleanA === cleanB) return true;
+
+  const hasNightA = /\bnight\b/.test(cleanA);
+  const hasNightB = /\bnight\b/.test(cleanB);
+  if (hasNightA !== hasNightB) return false;
+
+  const hasMorningA = /\bmorning\b/.test(cleanA);
+  const hasMorningB = /\bmorning\b/.test(cleanB);
+  if (hasMorningA !== hasMorningB) return false;
+
+  const hasDayA = /\bday\b/.test(cleanA);
+  const hasDayB = /\bday\b/.test(cleanB);
+  if (hasDayA !== hasDayB) return false;
+
+  const normA = cleanA.replace(/\bshridevi\b/g, 'sridevi').replace(/\bbazaar\b/g, 'bazar');
+  const normB = cleanB.replace(/\bshridevi\b/g, 'sridevi').replace(/\bbazaar\b/g, 'bazar');
+
+  return normA === normB;
+};
+exports.isSameMarket = isSameMarket;
+
 // Core internal logic for automatically syncing and declaring pending results
 const executeAutoDeclareSync = async (inputMarkets = null) => {
   let marketsData = inputMarkets;
@@ -1471,6 +1499,35 @@ const executeAutoDeclareSync = async (inputMarkets = null) => {
   const todayDateStr = getISTDateStr();
   const declaredEvents = [];
 
+  // Auto-correction for previously mismatched KALYAN / KALYAN MORNING results
+  try {
+    const [misRows] = await db.query(
+      `SELECT id, game_name FROM result_chart 
+       WHERE (date = ? OR DATE(date) = ? OR date LIKE ?) 
+       AND LOWER(TRIM(game_name)) IN ('kalyan', 'kalyan night') 
+       AND open_panna = '147' AND close_panna = '369'`,
+      [todayDateStr, todayDateStr, `${todayDateStr}%`]
+    );
+    for (const mr of misRows) {
+      const [kmRows] = await db.query(
+        `SELECT id FROM result_chart 
+         WHERE (date = ? OR DATE(date) = ? OR date LIKE ?) 
+         AND LOWER(TRIM(game_name)) = 'kalyan morning'`,
+        [todayDateStr, todayDateStr, `${todayDateStr}%`]
+      );
+      if (kmRows.length === 0) {
+        await db.query(`UPDATE result_chart SET game_name = 'KALYAN MORNING' WHERE id = ?`, [mr.id]);
+        await db.query(`UPDATE user_winning_report SET game_name = 'KALYAN MORNING' WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR date LIKE ?)`, [mr.game_name, todayDateStr, `${todayDateStr}%`]);
+        console.log(`[executeAutoDeclareSync] Auto-corrected mismatched result_chart row #${mr.id} from '${mr.game_name}' to 'KALYAN MORNING'`);
+      } else {
+        await db.query(`DELETE FROM result_chart WHERE id = ?`, [mr.id]);
+        console.log(`[executeAutoDeclareSync] Cleaned duplicate mismatched row #${mr.id} from '${mr.game_name}'`);
+      }
+    }
+  } catch (err) {
+    console.error('[executeAutoDeclareSync] Auto-correction error:', err.message);
+  }
+
   // Get all distinct games in game_time
   let [dbGames] = await db.query(
     `SELECT g1.* FROM game_time g1
@@ -1484,28 +1541,30 @@ const executeAutoDeclareSync = async (inputMarkets = null) => {
     dbGames = chartGames || [];
   }
 
-  const cleanStr = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  // Pre-load all today's chart rows
+  const [allTodayChartRows] = await db.query(
+    'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?)',
+    [todayDateStr, todayDateStr, `${todayDateStr}%`]
+  ).catch(() => [[]]);
 
   for (const m of marketsData) {
     const apiMarketName = String(m.market_name || m.game_name || '').trim();
     if (!apiMarketName) continue;
 
-    const matchedGame = dbGames.find(g => {
-      const gn = String(g.game || '').trim().toLowerCase();
-      const mn = apiMarketName.toLowerCase();
-      if (gn === mn) return true;
-      const cgn = cleanStr(gn);
-      const cmn = cleanStr(mn);
-      return cgn === cmn || (cgn.length >= 4 && cmn.includes(cgn)) || (cmn.length >= 4 && cgn.includes(cmn));
-    });
+    const matchedGame = dbGames.find(g => isSameMarket(g.game, apiMarketName));
     const canonicalGameName = matchedGame ? matchedGame.game : apiMarketName;
 
-    // Check current chart row for today
-    const [chartRows] = await db.query(
-      'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?) AND TRIM(LOWER(game_name)) = TRIM(LOWER(?))',
-      [todayDateStr, todayDateStr, `${todayDateStr}%`, canonicalGameName]
-    );
-    const chartRow = chartRows.length > 0 ? chartRows[0] : null;
+    // Check current chart row for today using isSameMarket
+    let chartRow = (allTodayChartRows || []).find(r => isSameMarket(r.game_name, canonicalGameName)) || null;
+    if (!chartRow) {
+      const [freshChartRows] = await db.query(
+        'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?) AND TRIM(LOWER(game_name)) = TRIM(LOWER(?))',
+        [todayDateStr, todayDateStr, `${todayDateStr}%`, canonicalGameName]
+      );
+      if (freshChartRows && freshChartRows.length > 0) {
+        chartRow = freshChartRows[0];
+      }
+    }
 
     // 1. Check Open declaration
     const openPana = String(m.open_pana || '').trim();
@@ -1634,6 +1693,11 @@ exports.getAutoWinnerCounts = async (req, res) => {
 
     const counts = {};
 
+    const [allChartRows] = await db.query(
+      'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?)',
+      [targetDate, targetDate, `${targetDate}%`]
+    ).catch(() => [[]]);
+
     for (const m of markets) {
       const marketName = String(m.market_name || m.game_name || '').trim();
       if (!marketName) continue;
@@ -1641,18 +1705,15 @@ exports.getAutoWinnerCounts = async (req, res) => {
       let openCount = 0;
       let closeCount = 0;
 
-      // 1. Check if already declared in result_chart
-      const [chartRows] = await db.query(
-        'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?) AND TRIM(LOWER(game_name)) = TRIM(LOWER(?))',
-        [targetDate, targetDate, `${targetDate}%`, marketName]
-      );
-      const chartRow = chartRows.length > 0 ? chartRows[0] : null;
+      // 1. Check if already declared in result_chart using isSameMarket
+      const chartRow = (allChartRows || []).find(r => isSameMarket(r.game_name, marketName)) || null;
+      const targetGameName = chartRow ? chartRow.game_name : marketName;
 
       // OPEN COUNT
       if (chartRow && chartRow.open_panna && chartRow.open_digit) {
         const [rep] = await db.query(
-          'SELECT COUNT(*) as cnt FROM user_winning_report WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR date LIKE ?) AND LOWER(session) = "open"',
-          [marketName, targetDate, `${targetDate}%`]
+          'SELECT COUNT(*) as cnt FROM user_winning_report WHERE (TRIM(LOWER(game_name)) = TRIM(LOWER(?)) OR TRIM(LOWER(game_name)) = TRIM(LOWER(?))) AND (date = ? OR date LIKE ?) AND LOWER(session) = "open"',
+          [marketName, targetGameName, targetDate, `${targetDate}%`]
         );
         openCount = rep[0]?.cnt || 0;
       } else {
@@ -1665,21 +1726,21 @@ exports.getAutoWinnerCounts = async (req, res) => {
 
           const [panaBids] = await db.query(
             `SELECT COUNT(*) as cnt FROM user_bid_history 
-             WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+             WHERE (TRIM(LOWER(game_name)) = TRIM(LOWER(?)) OR TRIM(LOWER(game_name)) = TRIM(LOWER(?)))
              AND (date = ? OR date LIKE ?) 
              AND LOWER(session) = 'open'
              AND (TRIM(open_pana) = TRIM(?) OR (TRIM(open_pana) = 'NA' AND TRIM(close_pana) = TRIM(?)))
              AND game_type != 'Half Sangam' AND game_type != 'Full Sangam'`,
-            [marketName, targetDate, `${targetDate}%`, openPana, openPana]
+            [marketName, targetGameName, targetDate, `${targetDate}%`, openPana, openPana]
           );
           const [digitBids] = await db.query(
             `SELECT COUNT(*) as cnt FROM user_bid_history 
-             WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+             WHERE (TRIM(LOWER(game_name)) = TRIM(LOWER(?)) OR TRIM(LOWER(game_name)) = TRIM(LOWER(?)))
              AND (date = ? OR date LIKE ?) 
              AND LOWER(session) = 'open'
              AND (open_digit = ? OR (open_digit = 'NA' AND close_digit = ?))
              AND (game_type = 'Single Digit' OR game_type = 'Single Ank')`,
-            [marketName, targetDate, `${targetDate}%`, digitVal, digitVal]
+            [marketName, targetGameName, targetDate, `${targetDate}%`, digitVal, digitVal]
           );
           openCount = (panaBids[0]?.cnt || 0) + (digitBids[0]?.cnt || 0);
         }
@@ -1688,8 +1749,8 @@ exports.getAutoWinnerCounts = async (req, res) => {
       // CLOSE COUNT
       if (chartRow && chartRow.close_panna && chartRow.close_digit) {
         const [rep] = await db.query(
-          'SELECT COUNT(*) as cnt FROM user_winning_report WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR date LIKE ?) AND (LOWER(session) = "close" OR LOWER(session) = "sangam")',
-          [marketName, targetDate, `${targetDate}%`]
+          'SELECT COUNT(*) as cnt FROM user_winning_report WHERE (TRIM(LOWER(game_name)) = TRIM(LOWER(?)) OR TRIM(LOWER(game_name)) = TRIM(LOWER(?))) AND (date = ? OR date LIKE ?) AND (LOWER(session) = "close" OR LOWER(session) = "sangam")',
+          [marketName, targetGameName, targetDate, `${targetDate}%`]
         );
         closeCount = rep[0]?.cnt || 0;
       } else {
@@ -1702,21 +1763,21 @@ exports.getAutoWinnerCounts = async (req, res) => {
 
           const [panaBids] = await db.query(
             `SELECT COUNT(*) as cnt FROM user_bid_history 
-             WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+             WHERE (TRIM(LOWER(game_name)) = TRIM(LOWER(?)) OR TRIM(LOWER(game_name)) = TRIM(LOWER(?)))
              AND (date = ? OR date LIKE ?) 
              AND LOWER(session) = 'close'
              AND (TRIM(close_pana) = TRIM(?) OR (TRIM(close_pana) = 'NA' AND TRIM(open_pana) = TRIM(?)))
              AND game_type != 'Half Sangam' AND game_type != 'Full Sangam'`,
-            [marketName, targetDate, `${targetDate}%`, closePana, closePana]
+            [marketName, targetGameName, targetDate, `${targetDate}%`, closePana, closePana]
           );
           const [digitBids] = await db.query(
             `SELECT COUNT(*) as cnt FROM user_bid_history 
-             WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+             WHERE (TRIM(LOWER(game_name)) = TRIM(LOWER(?)) OR TRIM(LOWER(game_name)) = TRIM(LOWER(?)))
              AND (date = ? OR date LIKE ?) 
              AND LOWER(session) = 'close'
              AND (close_digit = ? OR (close_digit = 'NA' AND open_digit = ?))
              AND (game_type = 'Single Digit' OR game_type = 'Single Ank')`,
-            [marketName, targetDate, `${targetDate}%`, digitVal, digitVal]
+            [marketName, targetGameName, targetDate, `${targetDate}%`, digitVal, digitVal]
           );
 
           const openRe = chartRow?.open_digit || (m.open_digit !== '*' ? m.open_digit : null);
@@ -1728,11 +1789,11 @@ exports.getAutoWinnerCounts = async (req, res) => {
           if (openRe) {
             const [jBids] = await db.query(
               `SELECT COUNT(*) as cnt FROM user_bid_history 
-               WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+               WHERE (TRIM(LOWER(game_name)) = TRIM(LOWER(?)) OR TRIM(LOWER(game_name)) = TRIM(LOWER(?)))
                AND (date = ? OR date LIKE ?) 
                AND (game_type = 'Jodi Digit' OR game_type = 'Jodi' OR game_type LIKE '%Jodi%' OR game_type = 'Red Bracket') 
                AND open_digit = ? AND close_digit = ?`,
-              [marketName, targetDate, `${targetDate}%`, openRe, digitVal]
+              [marketName, targetGameName, targetDate, `${targetDate}%`, openRe, digitVal]
             );
             jodiCount = jBids[0]?.cnt || 0;
           }
@@ -1740,11 +1801,11 @@ exports.getAutoWinnerCounts = async (req, res) => {
           if (openRe && openPa) {
             const [hsBids] = await db.query(
               `SELECT COUNT(*) as cnt FROM user_bid_history 
-               WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) 
+               WHERE (TRIM(LOWER(game_name)) = TRIM(LOWER(?)) OR TRIM(LOWER(game_name)) = TRIM(LOWER(?)))
                AND (date = ? OR date LIKE ?) 
                AND game_type = 'Half Sangam' 
                AND ((open_digit = ? AND close_pana = ?) OR (open_pana = ? AND close_digit = ?))`,
-              [marketName, targetDate, `${targetDate}%`, openRe, closePana, openPa, digitVal]
+              [marketName, targetGameName, targetDate, `${targetDate}%`, openRe, closePana, openPa, digitVal]
             );
             halfSangamCount = hsBids[0]?.cnt || 0;
 
@@ -1790,13 +1851,13 @@ exports.deleteDeclaredResult = async (req, res) => {
     const { revertedCount, totalAmount } = await revertWinnersForGame(game_name, date, sess);
 
     // 2. Update or delete result_chart entry
-    const [chartRows] = await db.query(
-      'SELECT * FROM result_chart WHERE TRIM(LOWER(game_name)) = TRIM(LOWER(?)) AND (date = ? OR DATE(date) = ? OR date LIKE ?)',
-      [game_name, date, date, `${date}%`]
+    const [allChartRows] = await db.query(
+      'SELECT * FROM result_chart WHERE (date = ? OR DATE(date) = ? OR date LIKE ?)',
+      [date, date, `${date}%`]
     );
+    const row = (allChartRows || []).find(r => isSameMarket(r.game_name, game_name)) || null;
 
-    if (chartRows.length > 0) {
-      const row = chartRows[0];
+    if (row) {
       if (sess === 'open') {
         if (!row.close_panna || row.close_panna === '') {
           await db.query('DELETE FROM result_chart WHERE id = ?', [row.id]);

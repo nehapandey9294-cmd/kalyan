@@ -2466,13 +2466,38 @@ const AdminDashboard = ({ setAdminAuth }) => {
     setAutoResultTestResult(null);
   };
 
+// Robust market matcher: ensures session suffixes (night, morning, day) match strictly,
+// preventing substring collisions like 'KALYAN' matching 'KALYAN NIGHT' or 'KALYAN MORNING'.
+const isSameMarket = (nameA, nameB) => {
+  if (!nameA || !nameB) return false;
+  const cleanA = String(nameA).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const cleanB = String(nameB).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!cleanA || !cleanB) return false;
+  if (cleanA === cleanB) return true;
+
+  const hasNightA = /\bnight\b/.test(cleanA);
+  const hasNightB = /\bnight\b/.test(cleanB);
+  if (hasNightA !== hasNightB) return false;
+
+  const hasMorningA = /\bmorning\b/.test(cleanA);
+  const hasMorningB = /\bmorning\b/.test(cleanB);
+  if (hasMorningA !== hasMorningB) return false;
+
+  const hasDayA = /\bday\b/.test(cleanA);
+  const hasDayB = /\bday\b/.test(cleanB);
+  if (hasDayA !== hasDayB) return false;
+
+  const normA = cleanA.replace(/\bshridevi\b/g, 'sridevi').replace(/\bbazaar\b/g, 'bazar');
+  const normB = cleanB.replace(/\bshridevi\b/g, 'sridevi').replace(/\bbazaar\b/g, 'bazar');
+
+  return normA === normB;
+};
+
   // Helper: Find matching declared result in local database (result_chart)
   const findDeclaredMarket = (marketName, targetDate = autoSelectedDate) => {
     if (!marketName) return null;
-    const clean = String(marketName).trim().toLowerCase();
     return declaredResultsList.find(r => {
-      const rName = String(r.game_name || '').trim().toLowerCase();
-      const matchesName = rName === clean || clean.includes(rName) || rName.includes(clean);
+      const matchesName = isSameMarket(r.game_name, marketName);
       const matchesDate = !targetDate || r.date === targetDate || String(r.date).startsWith(targetDate);
       return matchesName && matchesDate;
     });
@@ -2672,7 +2697,9 @@ const AdminDashboard = ({ setAdminAuth }) => {
   // Delete declared result for Auto Result table (Open, Close, or Full)
   const handleAutoDeleteResult = async (marketName, session = 'all') => {
     const targetDate = autoSelectedDate;
-    await handleDeleteDeclaredResult(marketName, targetDate, session);
+    const declaredRow = findDeclaredMarket(marketName, targetDate);
+    const targetGameName = declaredRow?.game_name || marketName;
+    await handleDeleteDeclaredResult(targetGameName, targetDate, session);
     fetchAutoResults(targetDate);
   };
 
