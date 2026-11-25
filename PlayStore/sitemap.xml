@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <url>
+    <loc>https://user-and-admin.onrender.com/PlayStore/</loc>
+    <lastmod>2026-11-25T09:00:00+05:30</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://user-and-admin.onrender.com/PlayStore/assets/logo.png</image:loc>
+      <image:title>Kalyan Matka Official App Logo</image:title>
+      <image:caption>Kalyan Matka - Android App on Google Play Store</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://user-and-admin.onrender.com/PlayStore/index.html</loc>
+    <lastmod>2026-11-25T09:00:00+05:30</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+</urlset>
+

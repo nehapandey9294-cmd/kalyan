@@ -63,6 +63,7 @@ app.use('/apk', express.static(path.join(__dirname, '..', 'PlayStore', 'apk'), a
 app.use('/apk', express.static(path.join(__dirname, '..', 'landing', 'public', 'apk'), apkStaticOptions));
 app.use('/apk', express.static(path.join(__dirname, '..', 'landing', 'apk'), apkStaticOptions));
 app.use('/PlayStore', express.static(path.join(__dirname, '..', 'PlayStore'), apkStaticOptions));
+app.use('/playstore', express.static(path.join(__dirname, '..', 'PlayStore'), apkStaticOptions));
 
 app.get('/api/download-apk', (req, res) => {
   const possiblePaths = [

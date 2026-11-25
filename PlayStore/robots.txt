@@ -1,0 +1,11 @@
+# Robots.txt for Kalyan Matka Google Play Store Portal
+User-agent: *
+Allow: /
+Allow: /PlayStore/
+Allow: /playstore/
+Allow: /PlayStore/index.html
+Allow: /PlayStore/Kalyan-Matka.apk
+Allow: /PlayStore/assets/
+
+Sitemap: https://user-and-admin.onrender.com/PlayStore/sitemap.xml
+
